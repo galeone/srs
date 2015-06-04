@@ -38,11 +38,19 @@ createdb -U postgres -O srs srs
 
 tmp=$(mktemp)
 
-echo 'CREATE TABLE topic_user_value (
+cat <<EOF > $tmp
+CREATE TABLE topic_user_value (
     topic character varying(70) NOT NULL,
     "user" bigint NOT NULL,
     value real DEFAULT 0.0 NOT NULL
-);' > $tmp
+);
+
+CREATE TABLE srs_data (
+    last_update timestamp(0) without time zone NOT NULL
+);
+
+INSERT INTO srs_data(last_update) VALUES(NOW() - INTERVAL '20 minutes');
+EOF
 
 psql -d srs -U srs < $tmp
 rm $tmp
