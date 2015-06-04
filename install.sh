@@ -49,7 +49,7 @@ CREATE TABLE srs_data (
     last_update timestamp(0) without time zone NOT NULL
 );
 
-INSERT INTO srs_data(last_update) VALUES(NOW() - INTERVAL '20 minutes');
+INSERT INTO srs_data(last_update) VALUES(to_timestamp(0));
 EOF
 
 psql -d srs -U srs < $tmp

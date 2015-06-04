@@ -18,149 +18,156 @@ open_db :- odbc_connect(nerdz, _,
 
 % Map only relations between entities in predicates.
 
-% user(A) followed user(B) the Time
-follow(user(A), user(B), Time) :- open_db, odbc_query(nerdz,
+% user(A) followed user(B) the Timestamp
+follow(user(A), user(B), Timestamp) :- open_db, odbc_query(nerdz,
                         'SELECT "from", "to", "time" FROM followers',
-                        row(A, B, Time), [
-                            types([integer, integer, timestamp])
+                        row(A, B, Timestamp), [
+                            types([integer, integer, integer])
                         ]).
 
-% user(A) followed project(B) the Time
-follow(user(A), project(B), Time) :- open_db, odbc_query(nerdz,
+% user(A) followed project(B) the Timestamp
+follow(user(A), project(B), Timestamp) :- open_db, odbc_query(nerdz,
                         'SELECT "from", "to", "time" FROM groups_followers',
-                        row(A, B, Time), [
-                            types([integer, integer, timestamp])
+                        row(A, B, Timestamp), [
+                            types([integer, integer, integer])
                         ]).
 
-% user(A) bookmarked post(B) the Time
-bookmark(user(A), post(P), Time) :- open_db, odbc_query(nerdz,
+% user(A) bookmarked post(B) the Timestamp
+bookmark(user(A), post(P), Timestamp) :- open_db, odbc_query(nerdz,
                         'SELECT "from", "hpid", "time" FROM bookmarks',
-                        row(A, P, Time), [
-                            types([integer, integer, timestamp])
+                        row(A, P, Timestamp), [
+                            types([integer, integer, integer])
                         ]).
 
-% user(A) bookmarked project_post(B) the Time
-bookmark(user(A), project_post(P), Time) :- open_db, odbc_query(nerdz,
+% user(A) bookmarked project_post(B) the Timestamp
+bookmark(user(A), project_post(P), Timestamp) :- open_db, odbc_query(nerdz,
                         'SELECT "from", "hpid", "time" FROM groups_bookmarks',
-                        row(A, P, Time), [
-                            types([integer, integer, timestamp])
+                        row(A, P, Timestamp), [
+                            types([integer, integer, integer])
                         ]).
 
-% user(A) rated comment(C) of user(B) the Time
-vote(user(A), comment(C), user(B), rate(Rate), Time) :- open_db, odbc_query(nerdz,
+% user(A) rated comment(C) of user(B) the Timestamp
+vote(user(A), comment(C), user(B), rate(Rate), Timestamp) :- open_db, odbc_query(nerdz,
                         'SELECT "from", "hcid", "to", "vote", "time" FROM comment_thumbs',
-                        row(A, C, B, Rate, Time), [
-                            types([integer, integer, integer, integer, timestamp])
+                        row(A, C, B, Rate, Timestamp), [
+                            types([integer, integer, integer, integer, integer])
                         ]).
 
-% user(A) rated project_comment(C) of user(B) the Time
-vote(user(A), project_comment(C), user(B), rate(Rate), Time) :- open_db, odbc_query(nerdz,
+% user(A) rated project_comment(C) of user(B) the Timestamp
+vote(user(A), project_comment(C), user(B), rate(Rate), Timestamp) :- open_db, odbc_query(nerdz,
                         'SELECT "from", "hcid", "to", "rate", "time" FROM groups_comment_thumbs',
-                        row(A, C, B, Rate, Time), [
-                            types([integer, integer, integer, integer, timestamp])
+                        row(A, C, B, Rate, Timestamp), [
+                            types([integer, integer, integer, integer, integer])
                         ]).
 
-% user(A) rated post(P) of user(B) the Time
-vote(user(A), post(P), user(B), rate(Rate), Time) :- open_db, odbc_query(nerdz,
+% user(A) rated post(P) of user(B) the Timestamp
+vote(user(A), post(P), user(B), rate(Rate), Timestamp) :- open_db, odbc_query(nerdz,
                         'SELECT "from", "hpid", "to", "vote", "time" FROM thumbs',
-                        row(A, P, B, Rate, Time), [
-                            types([integer, integer, integer, integer, timestamp])
+                        row(A, P, B, Rate, Timestamp), [
+                            types([integer, integer, integer, integer, integer])
                         ]).
 
-% user(A) rated project_post(P) of user(B) the Time
-vote(user(A), project_post(P), user(B), rate(Rate), Time) :- open_db, odbc_query(nerdz,
+% user(A) rated project_post(P) of user(B) the Timestamp
+vote(user(A), project_post(P), user(B), rate(Rate), Timestamp) :- open_db, odbc_query(nerdz,
                         'SELECT "from", "hpid", "to", "vote", "time" FROM groups_thumbs',
-                        row(A, P, B, Rate, Time), [
-                            types([integer, integer, integer, integer, timestamp])
+                        row(A, P, B, Rate, Timestamp), [
+                            types([integer, integer, integer, integer, integer])
                         ]).
 
-% user(A) commented on post(P) of user (B) the Time
-comment(user(A), post(P), user(B), Time) :- open_db, odbc_query(nerdz,
+% user(A) commented on post(P) of user (B) the Timestamp
+comment(user(A), post(P), user(B), Timestamp) :- open_db, odbc_query(nerdz,
                         'SELECT "from", "hpid", "to", "time" FROM comments',
-                        row(A, P, B, Time), [
-                            types([integer, integer, integer, timestamp])
+                        row(A, P, B, Timestamp), [
+                            types([integer, integer, integer, integer])
                         ]).
 
-% user(A) commented on project_post(P) of project(B) the Time
-comment(user(A), project_post(P), project(B), Time) :- open_db, odbc_query(nerdz,
+% user(A) commented on project_post(P) of project(B) the Timestamp
+comment(user(A), project_post(P), project(B), Timestamp) :- open_db, odbc_query(nerdz,
                         'SELECT "from", "hpid", "to", "time" FROM groups_comments',
-                        row(A, P, B, Time), [
-                            types([integer, integer, integer, timestamp])
+                        row(A, P, B, Timestamp), [
+                            types([integer, integer, integer, integer])
                         ]).
 
-% user(A) silented notification of user(B) on post(P) the Time
-silent(user(A), user(B), post(P), Time) :- open_db, odbc_query(nerdz,
+% user(A) silented notification of user(B) on post(P) the Timestamp
+silent(user(A), user(B), post(P), Timestamp) :- open_db, odbc_query(nerdz,
                         'SELECT "from", "to", "hpid", "time" FROM comments_no_notify',
-                        row(A, B, P, Time), [
-                            types([integer, integer, integer, timestamp])
+                        row(A, B, P, Timestamp), [
+                            types([integer, integer, integer, integer])
                         ]).
 
-% user(A) silented notification of user(B) on project_post(P) the Time
-silent(user(A), user(B), project_post(P), Time) :- open_db, odbc_query(nerdz,
+% user(A) silented notification of user(B) on project_post(P) the Timestamp
+silent(user(A), user(B), project_post(P), Timestamp) :- open_db, odbc_query(nerdz,
                         'SELECT "from", "to", "hpid", "time" FROM groups_comments_no_notify',
-                        row(A, B, P, Time), [
-                            types([integer, integer, integer, timestamp])
+                        row(A, B, P, Timestamp), [
+                            types([integer, integer, integer, integer])
                         ]).
 
-% user(A) silented notification on post(P) the Time
-silent(user(A), post(P), Time) :- open_db, odbc_query(nerdz,
+% user(A) silented notification on post(P) the Timestamp
+silent(user(A), post(P), Timestamp) :- open_db, odbc_query(nerdz,
                         'SELECT "user", "hpid", "time" FROM posts_no_notify',
-                        row(A, P, Time), [
-                            types([integer, integer, timestamp])
+                        row(A, P, Timestamp), [
+                            types([integer, integer, integer])
                         ]).
 
-% user(A) silented notification on project_post(P) the Time
-silent(user(A), project_post(P), Time) :- open_db, odbc_query(nerdz,
+% user(A) silented notification on project_post(P) the Timestamp
+silent(user(A), project_post(P), Timestamp) :- open_db, odbc_query(nerdz,
                         'SELECT "user", "hpid", "time" FROM groups_posts_no_notify',
-                        row(A, P, Time), [
-                            types([integer, integer, timestamp])
+                        row(A, P, Timestamp), [
+                            types([integer, integer, integer])
                         ]).
 
-% user(A) blacklisted user(B) the Time
-blacklist(user(A), user(B), Time) :- open_db, odbc_query(nerdz,
+% user(A) blacklisted user(B) the Timestamp
+blacklist(user(A), user(B), Timestamp) :- open_db, odbc_query(nerdz,
                         'SELECT "from", "to", "time" FROM blacklist',
-                        row(A, B, Time), [
-                            types([integer, integer,timestamp])
+                        row(A, B, Timestamp), [
+                            types([integer, integer,integer])
                         ]).
 
-% user(A) lurked post(P) of user(B) the Time
-lurk(user(A), post(P), user(B), Time)  :- open_db, odbc_query(nerdz,
+% user(A) lurked post(P) of user(B) the Timestamp
+lurk(user(A), post(P), user(B), Timestamp)  :- open_db, odbc_query(nerdz,
                         'SELECT "from", "hpid", "to", "time" FROM lurkers',
-                        row(A, P, B, Time), [
-                            types([integer, integer, integer, timestamp])
+                        row(A, P, B, Timestamp), [
+                            types([integer, integer, integer, integer])
                         ]).
 
-% user(A) lurked project_post(P) of user(B) the Time
-lurk(user(A), post(P), user(B), Time)  :- open_db, odbc_query(nerdz,
+% user(A) lurked project_post(P) of user(B) the Timestamp
+lurk(user(A), post(P), user(B), Timestamp)  :- open_db, odbc_query(nerdz,
                         'SELECT "from", "hpid", "to", "time" FROM groups_ lurkers',
-                        row(A, P, B, Time), [
-                            types([integer, integer, integer, timestamp])
+                        row(A, P, B, Timestamp), [
+                            types([integer, integer, integer, integer])
                         ]).
 
-% user(A) mentioned user(B) on post(P) the Time
-mention(user(A), user(B), post(P), Time) :- open_db, odbc_query(nerdz,
+% user(A) mentioned user(B) on post(P) the Timestamp
+mention(user(A), user(B), post(P), Timestamp) :- open_db, odbc_query(nerdz,
                         'SELECT "from", "to", "u_hpid", "time" FROM mentions WHERE "u_hpid" IS NOT NULL',
-                        row(A, B, P, Time), [
-                            types([integer, integer, integer, timestamp])
+                        row(A, B, P, Timestamp), [
+                            types([integer, integer, integer, integer])
                         ]).
 
-% user(A) mentioned user(B) on project_post(P) the Time
-mention(user(A), user(B), project_post(P), Time) :- open_db, odbc_query(nerdz,
+% user(A) mentioned user(B) on project_post(P) the Timestamp
+mention(user(A), user(B), project_post(P), Timestamp) :- open_db, odbc_query(nerdz,
                         'SELECT "from", "to", "g_hpid", "time" FROM mentions WHERE "g_hpid" IS NOT NULL',
-                        row(A, B, P, Time), [
-                            types([integer, integer, integer, timestamp])
+                        row(A, B, P, Timestamp), [
+                            types([integer, integer, integer, integer])
                         ]).
 
-% user(A) classified post(P) with Tag the Time
-classify(user(A), post(P), tag(Tag), Time) :- open_db, odbc_query(nerdz,
+% user(A) classified post(P) with Tag the Timestamp
+classify(user(A), post(P), tag(Tag), Timestamp) :- open_db, odbc_query(nerdz,
                         'SELECT "from", "u_hpid", "tag", "time" FROM posts_classification WHERE "u_hpid" IS NOT NULL',
-                        row(A, P, Tag, Time), [
-                            types([integer, integer, atom, timestamp])
+                        row(A, P, Tag, Timestamp), [
+                            types([integer, integer, atom, integer])
                         ]).
 
-% user(A) classified project_post(P) with Tag the Time
-classify(user(A), project_post(P), tag(Tag), Time) :- open_db, odbc_query(nerdz,
+% user(A) classified project_post(P) with Tag the Timestamp
+classify(user(A), project_post(P), tag(Tag), Timestamp) :- open_db, odbc_query(nerdz,
                         'SELECT "from", "g_hpid", "tag", "time" FROM posts_classification WHERE "g_hpid" IS NOT NULL',
-                        row(A, P, Tag, Time), [
-                            types([integer, integer, atom, timestamp])
+                        row(A, P, Tag, Timestamp), [
+                            types([integer, integer, atom, integer])
                         ]).
+
+% TC is the numer of times tag(T) has been user by user(A) in between range(Start, End)
+count(user(A), tag(T), range(Start, End), TC) :- open_db, odbc_prepare(nerdz,
+                        'SELECT COUNT(id) FROM posts_classification WHWRE lower("tag") = lower(?) AND "from" = ? AND "time" BETWEEN ? AND ?',
+                        [varchar(45), bigint, atom > date, atom > date], Statement),
+                        odbc_execute(Statement, [T, A, Start, End], row(TC)),
+                        odbc_free_statement(Statement).
