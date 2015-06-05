@@ -15,35 +15,44 @@ open_db  :- odbc_connect(srs, _, [ alias(srs), open(once) ]).
 % Populate the db every 20 minutes (with new values)
 
 % Check if 20 minutes from the last update are passed
-populate(L) :- open_db, odbc_query(srs,
-                'SELECT EXTRACT(EPOCH FROM NOW() - last_update)::INT, last_update FROM srs_data LIMIT 1',
-                row(ElapsedTime, LastUpdate), [ types([integer, integer]) ]),
+populate :- open_db, odbc_query(srs,
+                'SELECT EXTRACT(EPOCH FROM NOW() - yearly_last_update)::INT, yearly_last_update FROM srs_data LIMIT 1',
+                row(ElapsedTime, _), [ types([integer, integer]) ]),
                 ElapsedTime >= 1200 , % if its true, populate
-                write('Computing weights for dates between last_update and NOW'), nl,
+                write('Computing weights for dates between yearly_last_update and NOW'), nl,
                 write('Annual weights:'), nl, nl,
                 findall(
-                    (user(A), post(P), tag(T), Timestamp),
-                    (classify(user(A), post(P), tag(T), Timestamp), Timestamp > LastUpdate) , L), !.
-                % For every user(A), compute weight and insert in srs db
+                    (user(A), tag(T), year(Year)),
+                    classify(user(A), tag(T), year(Year)), L), !,
+                        %get_time(Today), YearAgo is Today - 31536000,
+                        %write('Today: '), write(Today), write(' Year ago: '), write(YearAgo), nl,
+                    % For every user(A), compute tag frequency in the year(tag) and insert in srs db
+                    topic_value(L),
+                    % Save NOW in last_update
+                    odbc_query(srs,'UPDATE srs_data SET yearly_last_update = NOW()'),
+                    close_db.
                 
-                % Save NOW in last_update
-frequency(Count, Tot, Freq) :- Freq is Count / Tot.
-value(Base, Exp, Value) :- Value is Base ** Exp.
+                %filter_tag(_, _, _, [], _).
+                %filter_tag(user(A), tag(T), Year, [(user(B), post(P), tag(TT), Timestamp)|Tail], [(user(B), post(P), tag(TT), Timestamp)|NewList]) :- 
+                %    (not(year(Timestamp, Year)), !; A \= B, !; T \= TT, !), !, filter_tag(user(A), tag(T), Year, Tail, NewList).
+                %filter_tag(user(A), tag(T), Year, [_|Tail], NewList) :- !, filter_tag(user(A), tag(T), Year, Tail, NewList).
 
-topic_value(_, _, []) :- !.
-topic_value(user(A), tag(T), range(Start, End), [(user(A), post(_), tag(T), Timestamp)|Tail]) :-
-    year(Timestamp, Year),
-    base(Year, B),
-    count(user(A), tag(T), range(Start, End), TagCount),
-    count(user(A), range(Start, End), TotalCount),
-    Exp is TagCount / TotalCount, value(B, Exp, Value),
-    odbc_prepare(srs, 'INSERT INTO topic_user_value("topic", "user", "value") VALUES(?,?,?)', [varchar(70), bigint, real], Statement),
-    odbc_execute(Statement, [A, T, Value], AffectedRow),
+frequency(TagCount, TotalCount, Value) :- Value is TagCount / TotalCount.
+
+topic_value([]) :- !.
+topic_value([(user(A), tag(T), year(Year))|Tail]) :-
+    write('Tag Year  '), write(Year), nl, write(user(A)), nl,
+    date_time_stamp(date(Year, 1, 1), Start), date_time_stamp(date(Year, 12, 31, 23, 59, 60.0, 0, _, _), End),
+    count(user(A), tag(T), range(Start, End), TagCountInRange), write(tag(T)), write(' count (in range): '), write(TagCountInRange), nl,
+    count(user(A), tag, range(Start, End), TotalTagCountInRange), write('Total count (in range): '), write(TotalTagCountInRange), nl,
+    frequency(TagCountInRange, TotalTagCountInRange, Freq), write('Frequency: '), write(Freq), nl,
+    odbc_prepare(srs,
+        'INSERT INTO yearly_user_topic_frequency("topic", "year", "user", "frequency") VALUES(lower(?), ?, ?, ?)',
+        [varchar(70), integer, bigint, real], Statement),
+    odbc_execute(Statement, [T, Year, A, Freq], affected(AffectedRow)),
     AffectedRow =:= 1,
-    odbc_free_statement(Statement), !, 
-    topic_value(user(A), tag(T), range(Start, End), Tail).
-
-topic_value(user(A), tag(T), range(Start, End), [_|Tail]) :- topic_value(user(A), tag(T), range(Start, End), Tail).
+    odbc_free_statement(Statement), !,
+    topic_value(Tail).
 
 % test
 find_duplicate([H|T]) :- not(member(H, T)).
@@ -53,13 +62,13 @@ get_date_time_value(Key, Value) :-
     stamp_date_time(Stamp, DateTime, local),
     date_time_value(Key, DateTime, Value).
 
-year(Year) :- get_date_time_value(year, Year).
-year(Timestamp, Year) :- stamp_date_time(Timestamp, DateTime, local),
-              date_time_value(year, DateTime, Year).
+get_date_time_vakye(Stamp, Key, Value) :-
+    stamp_date_time(Stamp, DateTime, local),
+    date_time_value(Key, DateTime, Value).
 
 :- dynamic base_res/2.
 base(Year, B)   :- base_res(Year, B), !.
-base(Year, 100) :- year(Actual), Actual =< Year,
+base(Year, 100) :- get_date_time_value(year, Actual), Actual =< Year,
                     assert(base_res(Year, 100)), !.
 
 base(Year, B)   :- NextYear is Year + 1, base(NextYear, NextBase), B is NextBase / 2,

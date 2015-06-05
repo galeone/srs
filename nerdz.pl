@@ -3,7 +3,7 @@
 :- module(nerdz, [
             name/1, follow/3, bookmark/3, vote/5,
             comment/4, silent/4, blacklist/3, lurk/4,
-            mention/4, classify/4
+            mention/4, classify/4, classify/3, count/4
         ]).
 
 use_module(library(odbc)).
@@ -165,9 +165,26 @@ classify(user(A), project_post(P), tag(Tag), Timestamp) :- open_db, odbc_query(n
                             types([integer, integer, atom, integer])
                         ]).
 
-% TC is the numer of times tag(T) has been user by user(A) in between range(Start, End)
+% user(A) classified posts with tag(t) during the year(Year)
+classify(user(A), tag(T), year(Year)) :- open_db, odbc_query(nerdz,
+                        'select distinct "from", "tag", extract(year from "time") from posts_classification',
+                        row(A, T, Year), [
+                            types([integer, atom, integer])
+                        ]).
+
+% TC is the number of times tag(T) has been user by user(A) in between range(Start, End)
 count(user(A), tag(T), range(Start, End), TC) :- open_db, odbc_prepare(nerdz,
-                        'SELECT COUNT(id) FROM posts_classification WHWRE lower("tag") = lower(?) AND "from" = ? AND "time" BETWEEN ? AND ?',
-                        [varchar(45), bigint, atom > date, atom > date], Statement),
+                        'SELECT COUNT(id) FROM posts_classification WHERE lower("tag") = lower(?) AND "from" = ? AND "time" >= ? AND "time" <= ?',
+                        [varchar(45), bigint, float > timestamp, float > timestamp], Statement),
                         odbc_execute(Statement, [T, A, Start, End], row(TC)),
                         odbc_free_statement(Statement).
+
+:- dynamic total_count_res/4.
+% TC is the number of times user(A) used some tag betweeen range(Start, End)
+count(user(A), tag, range(Start, End), TC) :- total_count_res(user(A), tag, range(Start, End), TC), !.
+count(user(A), tag, range(Start, End), TC) :- open_db, odbc_prepare(nerdz,
+                    'SELECT COUNT(id) FROM posts_classification WHERE "from" = ? AND "time" >= ? AND "time" <= ?',
+                    [bigint, float > timestamp, float > timestamp], Statement),
+                    odbc_execute(Statement, [A, Start, End], row(TC)),
+                    odbc_free_statement(Statement), !, 
+                    assert( total_count_res(user(A), tag, range(Start, End), TC) ).

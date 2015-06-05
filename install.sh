@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+######################################
+# REQUIRES AT LEAST swi-prolog 7.X.X #
+######################################
+
 cd /tmp
 mkdir srs
 cd srs
@@ -39,17 +43,18 @@ createdb -U postgres -O srs srs
 tmp=$(mktemp)
 
 cat <<EOF > $tmp
-CREATE TABLE topic_user_value (
-    topic character varying(70) NOT NULL,
-    "user" bigint NOT NULL,
-    value real DEFAULT 0.0 NOT NULL
+CREATE TABLE yearly_user_topic_frequency(
+    "topic"     character varying(70) NOT NULL,
+    "year"      int NOT NULL,
+    "user"      bigint NOT NULL,
+    "frequency" real DEFAULT 0.0 NOT NULL
 );
 
 CREATE TABLE srs_data (
-    last_update timestamp(0) without time zone NOT NULL
+    yearly_last_update timestamp(0) without time zone NOT NULL
 );
 
-INSERT INTO srs_data(last_update) VALUES(to_timestamp(0));
+INSERT INTO srs_data(yearly_last_update) VALUES(to_timestamp(0));
 EOF
 
 psql -d srs -U srs < $tmp
