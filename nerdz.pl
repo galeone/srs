@@ -153,38 +153,123 @@ mention(user(A), user(B), project_post(P), Timestamp) :- open_db, odbc_query(ner
 
 % user(A) classified post(P) with Tag the Timestamp
 classify(user(A), post(P), tag(Tag), Timestamp) :- open_db, odbc_query(nerdz,
-                        'SELECT "from", "u_hpid", "tag", "time" FROM posts_classification WHERE "u_hpid" IS NOT NULL',
+                        'SELECT "from", "u_hpid", "tag", "time" FROM posts_classification WHERE "u_hpid" IS NOT NULL AND "from" IS NOT NULL',
                         row(A, P, Tag, Timestamp), [
                             types([integer, integer, atom, integer])
                         ]).
 
 % user(A) classified project_post(P) with Tag the Timestamp
 classify(user(A), project_post(P), tag(Tag), Timestamp) :- open_db, odbc_query(nerdz,
-                        'SELECT "from", "g_hpid", "tag", "time" FROM posts_classification WHERE "g_hpid" IS NOT NULL',
+                        'SELECT "from", "g_hpid", "tag", "time" FROM posts_classification WHERE "g_hpid" IS NOT NULL AND "from" IS NOT NULL',
                         row(A, P, Tag, Timestamp), [
                             types([integer, integer, atom, integer])
                         ]).
 
 % user(A) classified posts with tag(t) during the year(Year)
 classify(user(A), tag(T), year(Year)) :- open_db, odbc_query(nerdz,
-                        'select distinct "from", "tag", extract(year from "time") from posts_classification',
+                        'select distinct "from", "tag", extract(year from "time") from posts_classification WHERE "from" IS NOT NULL',
                         row(A, T, Year), [
                             types([integer, atom, integer])
                         ]).
 
-% TC is the number of times tag(T) has been user by user(A) in between range(Start, End)
-count(user(A), tag(T), range(Start, End), TC) :- open_db, odbc_prepare(nerdz,
+% user(A) sarched tag(T) the Timestamp
+search(user(A), tag(T), Timestamp) :- open_db, odbc_query(nerdz,
+                        'SELECT "from", "value", "time" from searches',
+                        row(A, T, Timestamp), [
+                            types([integer, atom, integer])
+                        ]).
+
+% user(A) sarched tag(T) during the year(Year)
+search(user(A), tag(T), year(Year)) :- open_db, odbc_query(nerdz,
+                        'SELECT "from", "value", extract(year from "time") from searches',
+                        row(A, T, Year), [
+                            types([integer, atom, integer])
+                        ]).
+
+% TC is the number of times tag(T) has been used by user(A) in range(Start, End)
+count(user(A), tagged(tag(T)), range(Start, End), TC) :- open_db, odbc_prepare(nerdz,
                         'SELECT COUNT(id) FROM posts_classification WHERE lower("tag") = lower(?) AND "from" = ? AND "time" >= ? AND "time" <= ?',
                         [varchar(45), bigint, float > timestamp, float > timestamp], Statement),
                         odbc_execute(Statement, [T, A, Start, End], row(TC)),
                         odbc_free_statement(Statement).
 
+% TC is the number of times tag(T) has been searched by user(A) in range(Start, End)
+count(user(A), searched(tag(T)), range(Start, End), TC) :- open_db, odbc_prepare(nerdz,
+                        'SELECT COUNT(id) FROM searches WHERE lower("value") = lower(?) AND "from" = ? AND "time" >= ? AND "time" <= ?',
+                        [varchar(45), bigint, float > timestamp, float > timestamp], Statement),
+                        odbc_execute(Statement, [T, A, Start, End], row(TC)),
+                        odbc_free_statement(Statement).
+
+%TODO: split in 4 query and sum
+count(user(A), rated_positive(tag(T)), range(Start, End), TC) :- open_db, odbc_prepare(nerdz,
+                        'SELECT count(thumbs.counter) + count(groups_thumbs.counter) + count(groups_comment_thumbs.counter) +
+                                count(comment_thumbs.counter)
+                         FROM thumbs, groups_thumbs, groups_comment_thumbs, comment_thumbs, posts_classification, posts, groups_posts, comments, groups_comments
+                         WHERE
+                            lower(posts_classification.tag) = lower(?) AND
+                            (
+                                (
+                                    posts_classification.u_hpid = thumbs.hpid AND
+                                    thumbs.from = ? AND
+                                    thumbs.vote = 1 AND
+                                    thumbs.time >= ? AND thumbs.time <= ?
+                                ) OR
+                                (
+                                    posts_classification.g_hpid = groups_thumbs.hpid AND
+                                    groups_thumbs.from = ? AND
+                                    groups_thumbs.vote = 1 AND
+                                    groups_thumbs.time >= ? AND groups_thumbs.time <= ?
+                                ) OR
+                                (
+                                    posts_classification.u_hpid = posts.hpid AND
+                                    comments.hpid = posts.hpid AND
+                                    comment_thumbs.hcid = comments.hcid AND
+                                    comment_thumbs.from = ? AND
+                                    comment_thumbs.vote = 1 AND
+                                    comment_thumbs.time >= ? AND comment_thumbs.time <= ?
+                                ) OR
+                                (
+                                    posts_classification.g_hpid = groups_posts.hpid AND
+                                    groups_comments.hpid = groups_posts.hpid AND
+                                    groups_comment_thumbs.hcid = groups_comments.hcid AND
+                                    groups_comment_thumbs.from = ? AND
+                                    groups_comment_thumbs.vote = 1 AND
+                                    groups_comment_thumbs.time >= ? AND groups_comment_thumbs.time <= ?
+                                )
+                            )',
+                        [
+                            varchar(45),
+                            bigint, float > timestamp, float > timestamp,
+                            bigint, float > timestamp, float > timestamp,
+                            bigint, float > timestamp, float > timestamp,
+                            bigint, float > timestamp, float > timestamp
+                        ], Statement),
+                        odbc_execute(Statement, [
+                            T,
+                            A, Start, End,
+                            A, Start, End,
+                            A, Start, End,
+                            A, Start, End
+                        ], row(TC)),
+                        odbc_free_statement(Statement).
+
+
 :- dynamic total_count_res/4.
 % TC is the number of times user(A) used some tag betweeen range(Start, End)
-count(user(A), tag, range(Start, End), TC) :- total_count_res(user(A), tag, range(Start, End), TC), !.
-count(user(A), tag, range(Start, End), TC) :- open_db, odbc_prepare(nerdz,
+count(user(A), tagged, range(Start, End), TC) :- total_count_res(user(A), tagged, range(Start, End), TC), !.
+count(user(A), tagged, range(Start, End), TC) :- open_db, odbc_prepare(nerdz,
                     'SELECT COUNT(id) FROM posts_classification WHERE "from" = ? AND "time" >= ? AND "time" <= ?',
                     [bigint, float > timestamp, float > timestamp], Statement),
                     odbc_execute(Statement, [A, Start, End], row(TC)),
                     odbc_free_statement(Statement), !, 
-                    assert( total_count_res(user(A), tag, range(Start, End), TC) ).
+                    assert( total_count_res(user(A), tagged, range(Start, End), TC) ).
+
+% TC is the number of times user(A) searched some tag betweeen range(Start, End)
+count(user(A), searched, range(Start, End), TC) :- total_count_res(user(A), searched, range(Start, End), TC), !.
+count(user(A), searched, range(Start, End), TC) :- open_db, odbc_prepare(nerdz,
+                    'SELECT COUNT(id) FROM searches WHERE "from" = ? AND "time" >= ? AND "time" <= ?',
+                    [bigint, float > timestamp, float > timestamp], Statement),
+                    odbc_execute(Statement, [A, Start, End], row(TC)),
+                    odbc_free_statement(Statement), !, 
+                    assert( total_count_res(user(A), searched, range(Start, End), TC) ).
+

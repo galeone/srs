@@ -2,6 +2,7 @@
 % Do you want to use srs with an other social network? Define a module that exports
 % the same predicate of nerdz and replace the line below
 :- use_module(nerdz).
+consult(config).
 
 % populating the srs database, computing the cost for each item
 
@@ -36,20 +37,31 @@ populate :- open_db, odbc_query(srs,
                 %filter_tag(user(A), tag(T), Year, [(user(B), post(P), tag(TT), Timestamp)|Tail], [(user(B), post(P), tag(TT), Timestamp)|NewList]) :- 
                 %    (not(year(Timestamp, Year)), !; A \= B, !; T \= TT, !), !, filter_tag(user(A), tag(T), Year, Tail, NewList).
                 %filter_tag(user(A), tag(T), Year, [_|Tail], NewList) :- !, filter_tag(user(A), tag(T), Year, Tail, NewList).
+                %
+frequency(_ , 0, 0) :- !.
+frequency(Num, Den, Freq) :- Freq is Num / Den.
 
-frequency(TagCount, TotalCount, Value) :- Value is TagCount / TotalCount.
+frequency(user(A), What, range(Start, End), Frequency) :- functor(What, Action, _),
+    count(user(A), What, range(Start, End), TagCountInRange), write(What), write(' count (in range): '), write(TagCountInRange), nl,
+    count(user(A), Action, range(Start, End), TotalTagCountInRange), write('Total count (in range): '), write(TotalTagCountInRange), nl,
+    frequency(TagCountInRange, TotalTagCountInRange, Frequency), write('Tagged Frequency: '), write(Frequency), nl.
+
+% use findall (or bagof or setof ?)  to get all user(A), What, range, Frequency and store V
 
 topic_value([]) :- !.
 topic_value([(user(A), tag(T), year(Year))|Tail]) :-
     write('Tag Year  '), write(Year), nl, write(user(A)), nl,
     date_time_stamp(date(Year, 1, 1), Start), date_time_stamp(date(Year, 12, 31, 23, 59, 60.0, 0, _, _), End),
-    count(user(A), tag(T), range(Start, End), TagCountInRange), write(tag(T)), write(' count (in range): '), write(TagCountInRange), nl,
-    count(user(A), tag, range(Start, End), TotalTagCountInRange), write('Total count (in range): '), write(TotalTagCountInRange), nl,
-    frequency(TagCountInRange, TotalTagCountInRange, Freq), write('Frequency: '), write(Freq), nl,
+    frequency(user(A), tagged(tag(T)), range(Start, End), TagFrequency), % always <> 0
+    frequency(user(A), searched(tag(T)), range(Start, End), SearchFrequency),
+    frequency(user(A), rated_positive(tag(T)), range(Start, End), PositiveRateFrequency),
+    frequency(user(A), rated_negativetag(T)), range(Start, End), NegativeRateFrequency),
+    frequency(user(A), commented(tag(T)), range(Start, End), CommentFrequency),
+    % Restore after checking everything works
     odbc_prepare(srs,
-        'INSERT INTO yearly_user_topic_frequency("topic", "year", "user", "frequency") VALUES(lower(?), ?, ?, ?)',
-        [varchar(70), integer, bigint, real], Statement),
-    odbc_execute(Statement, [T, Year, A, Freq], affected(AffectedRow)),
+        'INSERT INTO yearly_user_topic_frequency("topic", "year", "user", "tagged", "rated_positive", "rated_negative", "commented", "searched") VALUES(lower(?), ?, ?, ?, ? ,?, ?, ?)',
+        [varchar(70), integer, bigint, real, real, real, real, real], Statement),
+    odbc_execute(Statement, [T, Year, A, TagFrequency, PositiveRateFrequency, NegativeRateFrequency, CommentFrequency, SearchFrequency], affected(AffectedRow)),
     AffectedRow =:= 1,
     odbc_free_statement(Statement), !,
     topic_value(Tail).
