@@ -16,7 +16,7 @@ open_db  :- odbc_connect(srs, _, [ alias(srs), open(once) ]).
 
 % Check if 20 minutes from the last update are passed
 populate :- open_db, odbc_query(srs,
-                'SELECT EXTRACT(EPOCH FROM NOW() - yearly_last_update)::INT, yearly_last_update FROM srs_data LIMIT 1',
+                'SELECT EXTRACT(EPOCH FROM NOW() - "timestamp")::INT, "timestamp" FROM srs_data WHERE "key" = \'YEARLY_LAST_UPDATE\'',
                 row(ElapsedTime, _), [ types([integer, integer]) ]),
                 ElapsedTime >= 1200 , % if its true, populate
                 write('Computing weights for dates between yearly_last_update and NOW'), nl,
@@ -29,7 +29,7 @@ populate :- open_db, odbc_query(srs,
                     % For every user(A), compute tag frequency in the year(tag) and insert in srs db
                     topic_value(L),
                     % Save NOW in last_update
-                    odbc_query(srs,'UPDATE srs_data SET yearly_last_update = NOW()'),
+                    odbc_query(srs,'UPDATE srs_data SET "timestamp" = NOW() WHERE "key" = \'YEARLY_LAST_UPDATE\''),
                     close_db.
                 
                 %filter_tag(_, _, _, [], _).

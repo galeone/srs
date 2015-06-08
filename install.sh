@@ -51,10 +51,12 @@ CREATE TABLE yearly_user_topic_frequency(
 );
 
 CREATE TABLE srs_data (
-    yearly_last_update timestamp(0) without time zone NOT NULL
+    "key" varchar(50) primary key not null,
+    "timestamp" timestamp(0) without time zone,
+    "value" varchar(100)
 );
 
-INSERT INTO srs_data(yearly_last_update) VALUES(to_timestamp(0));
+INSERT INTO srs_data("key", "timestamp") VALUES('YEARLY_LAST_UPDATE', to_timestamp(0));
 EOF
 
 psql -d srs -U srs < $tmp
