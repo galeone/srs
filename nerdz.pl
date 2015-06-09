@@ -200,56 +200,47 @@ count(user(A), searched(tag(T)), range(Start, End), TC) :- open_db, odbc_prepare
                         odbc_execute(Statement, [T, A, Start, End], row(TC)),
                         odbc_free_statement(Statement).
 
-%TODO: split in 4 query and sum
+% TC is the number of times an element (comment/post everywhere) has been rated positive by user(A) in range(Start, End)
 count(user(A), rated_positive(tag(T)), range(Start, End), TC) :- open_db, odbc_prepare(nerdz,
-                        'SELECT count(thumbs.counter) + count(groups_thumbs.counter) + count(groups_comment_thumbs.counter) +
-                                count(comment_thumbs.counter)
-                         FROM thumbs, groups_thumbs, groups_comment_thumbs, comment_thumbs, posts_classification, posts, groups_posts, comments, groups_comments
-                         WHERE
-                            lower(posts_classification.tag) = lower(?) AND
-                            (
-                                (
-                                    posts_classification.u_hpid = thumbs.hpid AND
-                                    thumbs.from = ? AND
-                                    thumbs.vote = 1 AND
-                                    thumbs.time >= ? AND thumbs.time <= ?
-                                ) OR
-                                (
-                                    posts_classification.g_hpid = groups_thumbs.hpid AND
-                                    groups_thumbs.from = ? AND
-                                    groups_thumbs.vote = 1 AND
-                                    groups_thumbs.time >= ? AND groups_thumbs.time <= ?
-                                ) OR
-                                (
-                                    posts_classification.u_hpid = posts.hpid AND
-                                    comments.hpid = posts.hpid AND
-                                    comment_thumbs.hcid = comments.hcid AND
-                                    comment_thumbs.from = ? AND
-                                    comment_thumbs.vote = 1 AND
-                                    comment_thumbs.time >= ? AND comment_thumbs.time <= ?
-                                ) OR
-                                (
-                                    posts_classification.g_hpid = groups_posts.hpid AND
-                                    groups_comments.hpid = groups_posts.hpid AND
-                                    groups_comment_thumbs.hcid = groups_comments.hcid AND
-                                    groups_comment_thumbs.from = ? AND
-                                    groups_comment_thumbs.vote = 1 AND
-                                    groups_comment_thumbs.time >= ? AND groups_comment_thumbs.time <= ?
-                                )
-                            )',
+                        'WITH th(c) as (
+                            SELECT COUNT(thumbs.counter)
+                            FROM posts_classification
+                            INNER JOIN  thumbs ON thumbs.hpid = posts_classification.u_hpid AND thumbs.vote = 1 AND thumbs.from = ? AND thumbs.time >=  ? AND thumbs.time <= ?
+                            INNER JOIN  posts ON posts.hpid = posts_classification.u_hpid
+                            WHERE       LOWER(posts_classification.tag) = LOWER(?)
+                        ), gth(c) as (
+                            SELECT COUNT(groups_thumbs.vote)
+                            FROM posts_classification
+                            INNER JOIN  groups_thumbs ON groups_thumbs.hpid = posts_classification.g_hpid AND groups_thumbs.vote = 1 AND groups_thumbs.from = ? AND groups_thumbs.time >= ? AND groups_thumbs.time <= ?
+                            INNER JOIN  groups_posts ON groups_posts.hpid = posts_classification.g_hpid
+                            WHERE       LOWER(posts_classification.tag) = LOWER(?)
+                        ), cth(c) as (
+                            SELECT COUNT(comment_thumbs.vote)
+                            FROM        posts_classification
+                            INNER JOIN  posts ON posts.hpid = posts_classification.u_hpid
+                            INNER JOIN  comments ON posts.hpid = comments.hpid
+                            INNER JOIN  comment_thumbs ON comment_thumbs.hcid = comments.hcid AND comment_thumbs.vote = 1 AND comment_thumbs.from = ? AND comment_thumbs.time >= ? AND comment_thumbs.time <= ?
+                            WHERE       LOWER(posts_classification.tag) = LOWER(?)
+                        ), gcth(c) as (
+                            SELECT COUNT(groups_comment_thumbs.vote)
+                            FROM posts_classification
+                            INNER JOIN groups_posts ON groups_posts.hpid = posts_classification.g_hpid
+                            INNER JOIN  groups_comments ON groups_posts.hpid = groups_comments.hpid
+                            INNER JOIN  groups_comment_thumbs ON groups_comment_thumbs.hcid = groups_comments.hcid AND groups_comment_thumbs.vote = 1 AND groups_comment_thumbs.from = ? AND groups_comment_thumbs.time >= ? AND groups_comment_thumbs.time <= ?
+                            WHERE       LOWER(posts_classification.tag) = LOWER(?)
+                        )
+                        SELECT th.c + gth.c + cth.c + gcth.c FROM th, gth, cth, gcth',
                         [
-                            varchar(45),
-                            bigint, float > timestamp, float > timestamp,
-                            bigint, float > timestamp, float > timestamp,
-                            bigint, float > timestamp, float > timestamp,
-                            bigint, float > timestamp, float > timestamp
+                            bigint, float > timestamp, float > timestamp, varchar(45),
+                            bigint, float > timestamp, float > timestamp, varchar(45),
+                            bigint, float > timestamp, float > timestamp, varchar(45),
+                            bigint, float > timestamp, float > timestamp, varchar(45)
                         ], Statement),
                         odbc_execute(Statement, [
-                            T,
-                            A, Start, End,
-                            A, Start, End,
-                            A, Start, End,
-                            A, Start, End
+                            A, Start, End, T,
+                            A, Start, End, T,
+                            A, Start, End, T,
+                            A, Start, End, T
                         ], row(TC)),
                         odbc_free_statement(Statement).
 
