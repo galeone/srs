@@ -244,6 +244,50 @@ count(user(A), rated_positive(tag(T)), range(Start, End), TC) :- open_db, odbc_p
                         ], row(TC)),
                         odbc_free_statement(Statement).
 
+% TC is the number of times an element (comment/post everywhere) has been rated negative by user(A) in range(Start, End)
+count(user(A), rated_negative(tag(T)), range(Start, End), TC) :- open_db, odbc_prepare(nerdz,
+                        'WITH th(c) as (
+                            SELECT COUNT(thumbs.counter)
+                            FROM posts_classification
+                            INNER JOIN  thumbs ON thumbs.hpid = posts_classification.u_hpid AND thumbs.vote = -1 AND thumbs.from = ? AND thumbs.time >=  ? AND thumbs.time <= ?
+                            INNER JOIN  posts ON posts.hpid = posts_classification.u_hpid
+                            WHERE       LOWER(posts_classification.tag) = LOWER(?)
+                        ), gth(c) as (
+                            SELECT COUNT(groups_thumbs.vote)
+                            FROM posts_classification
+                            INNER JOIN  groups_thumbs ON groups_thumbs.hpid = posts_classification.g_hpid AND groups_thumbs.vote = -1 AND groups_thumbs.from = ? AND groups_thumbs.time >= ? AND groups_thumbs.time <= ?
+                            INNER JOIN  groups_posts ON groups_posts.hpid = posts_classification.g_hpid
+                            WHERE       LOWER(posts_classification.tag) = LOWER(?)
+                        ), cth(c) as (
+                            SELECT COUNT(comment_thumbs.vote)
+                            FROM        posts_classification
+                            INNER JOIN  posts ON posts.hpid = posts_classification.u_hpid
+                            INNER JOIN  comments ON posts.hpid = comments.hpid
+                            INNER JOIN  comment_thumbs ON comment_thumbs.hcid = comments.hcid AND comment_thumbs.vote = -1 AND comment_thumbs.from = ? AND comment_thumbs.time >= ? AND comment_thumbs.time <= ?
+                            WHERE       LOWER(posts_classification.tag) = LOWER(?)
+                        ), gcth(c) as (
+                            SELECT COUNT(groups_comment_thumbs.vote)
+                            FROM posts_classification
+                            INNER JOIN groups_posts ON groups_posts.hpid = posts_classification.g_hpid
+                            INNER JOIN  groups_comments ON groups_posts.hpid = groups_comments.hpid
+                            INNER JOIN  groups_comment_thumbs ON groups_comment_thumbs.hcid = groups_comments.hcid AND groups_comment_thumbs.vote = -1 AND groups_comment_thumbs.from = ? AND groups_comment_thumbs.time >= ? AND groups_comment_thumbs.time <= ?
+                            WHERE       LOWER(posts_classification.tag) = LOWER(?)
+                        )
+                        SELECT th.c + gth.c + cth.c + gcth.c FROM th, gth, cth, gcth',
+                        [
+                            bigint, float > timestamp, float > timestamp, varchar(45),
+                            bigint, float > timestamp, float > timestamp, varchar(45),
+                            bigint, float > timestamp, float > timestamp, varchar(45),
+                            bigint, float > timestamp, float > timestamp, varchar(45)
+                        ], Statement),
+                        odbc_execute(Statement, [
+                            A, Start, End, T,
+                            A, Start, End, T,
+                            A, Start, End, T,
+                            A, Start, End, T
+                        ], row(TC)),
+                        odbc_free_statement(Statement).
+
 
 :- dynamic total_count_res/4.
 % TC is the number of times user(A) used some tag betweeen range(Start, End)
@@ -263,4 +307,88 @@ count(user(A), searched, range(Start, End), TC) :- open_db, odbc_prepare(nerdz,
                     odbc_execute(Statement, [A, Start, End], row(TC)),
                     odbc_free_statement(Statement), !, 
                     assert( total_count_res(user(A), searched, range(Start, End), TC) ).
+
+% TC is the number of times user(A) rated positive some elements between range(Start, End)
+count(user(A), rated_positive, range(Start, End), TC) :- total_count_res(user(A), rated_positive, range(Start, End), TC), !.
+count(user(A), rated_positive, range(Start, End), TC) :- open_db, odbc_prepare(nerdz,
+                    'WITH th(c) as (
+                        SELECT COUNT(thumbs.counter)
+                        FROM posts_classification
+                        INNER JOIN  thumbs ON thumbs.hpid = posts_classification.u_hpid AND thumbs.vote = 1 AND thumbs.from = ? AND thumbs.time >=  ? AND thumbs.time <= ?
+                        INNER JOIN  posts ON posts.hpid = posts_classification.u_hpid
+                    ), gth(c) as (
+                        SELECT COUNT(groups_thumbs.vote)
+                        FROM posts_classification
+                        INNER JOIN  groups_thumbs ON groups_thumbs.hpid = posts_classification.g_hpid AND groups_thumbs.vote = 1 AND groups_thumbs.from = ? AND groups_thumbs.time >= ? AND groups_thumbs.time <= ?
+                        INNER JOIN  groups_posts ON groups_posts.hpid = posts_classification.g_hpid
+                    ), cth(c) as (
+                        SELECT COUNT(comment_thumbs.vote)
+                        FROM        posts_classification
+                        INNER JOIN  posts ON posts.hpid = posts_classification.u_hpid
+                        INNER JOIN  comments ON posts.hpid = comments.hpid
+                        INNER JOIN  comment_thumbs ON comment_thumbs.hcid = comments.hcid AND comment_thumbs.vote = 1 AND comment_thumbs.from = ? AND comment_thumbs.time >= ? AND comment_thumbs.time <= ?
+                    ), gcth(c) as (
+                        SELECT COUNT(groups_comment_thumbs.vote)
+                        FROM posts_classification
+                        INNER JOIN groups_posts ON groups_posts.hpid = posts_classification.g_hpid
+                        INNER JOIN  groups_comments ON groups_posts.hpid = groups_comments.hpid
+                        INNER JOIN  groups_comment_thumbs ON groups_comment_thumbs.hcid = groups_comments.hcid AND groups_comment_thumbs.vote = 1 AND groups_comment_thumbs.from = ? AND groups_comment_thumbs.time >= ? AND groups_comment_thumbs.time <= ?
+                    )
+                    SELECT th.c + gth.c + cth.c + gcth.c FROM th, gth, cth, gcth',
+                    [
+                        bigint, float > timestamp, float > timestamp,
+                        bigint, float > timestamp, float > timestamp,
+                        bigint, float > timestamp, float > timestamp,
+                        bigint, float > timestamp, float > timestamp
+                    ], Statement),
+                    odbc_execute(Statement, [
+                        A, Start, End,
+                        A, Start, End,
+                        A, Start, End,
+                        A, Start, End
+                    ], row(TC)),
+                    odbc_free_statement(Statement), !,
+                    assert( total_count_res(user(A), rated_positive, range(Start, End), TC) ).
+
+% TC is the number of times user(A) rated negative some elements between range(Start, End)
+count(user(A), rated_negative, range(Start, End), TC) :- total_count_res(user(A), rated_negative, range(Start, End), TC), !.
+count(user(A), rated_negative, range(Start, End), TC) :- open_db, odbc_prepare(nerdz,
+                    'WITH th(c) as (
+                        SELECT COUNT(thumbs.counter)
+                        FROM posts_classification
+                        INNER JOIN  thumbs ON thumbs.hpid = posts_classification.u_hpid AND thumbs.vote = -1 AND thumbs.from = ? AND thumbs.time >=  ? AND thumbs.time <= ?
+                        INNER JOIN  posts ON posts.hpid = posts_classification.u_hpid
+                    ), gth(c) as (
+                        SELECT COUNT(groups_thumbs.vote)
+                        FROM posts_classification
+                        INNER JOIN  groups_thumbs ON groups_thumbs.hpid = posts_classification.g_hpid AND groups_thumbs.vote = -1 AND groups_thumbs.from = ? AND groups_thumbs.time >= ? AND groups_thumbs.time <= ?
+                        INNER JOIN  groups_posts ON groups_posts.hpid = posts_classification.g_hpid
+                    ), cth(c) as (
+                        SELECT COUNT(comment_thumbs.vote)
+                        FROM        posts_classification
+                        INNER JOIN  posts ON posts.hpid = posts_classification.u_hpid
+                        INNER JOIN  comments ON posts.hpid = comments.hpid
+                        INNER JOIN  comment_thumbs ON comment_thumbs.hcid = comments.hcid AND comment_thumbs.vote = -1 AND comment_thumbs.from = ? AND comment_thumbs.time >= ? AND comment_thumbs.time <= ?
+                    ), gcth(c) as (
+                        SELECT COUNT(groups_comment_thumbs.vote)
+                        FROM posts_classification
+                        INNER JOIN groups_posts ON groups_posts.hpid = posts_classification.g_hpid
+                        INNER JOIN  groups_comments ON groups_posts.hpid = groups_comments.hpid
+                        INNER JOIN  groups_comment_thumbs ON groups_comment_thumbs.hcid = groups_comments.hcid AND groups_comment_thumbs.vote = -1 AND groups_comment_thumbs.from = ? AND groups_comment_thumbs.time >= ? AND groups_comment_thumbs.time <= ?
+                    )
+                    SELECT th.c + gth.c + cth.c + gcth.c FROM th, gth, cth, gcth',
+                    [
+                        bigint, float > timestamp, float > timestamp,
+                        bigint, float > timestamp, float > timestamp,
+                        bigint, float > timestamp, float > timestamp,
+                        bigint, float > timestamp, float > timestamp
+                    ], Statement),
+                    odbc_execute(Statement, [
+                        A, Start, End,
+                        A, Start, End,
+                        A, Start, End,
+                        A, Start, End
+                    ], row(TC)),
+                    odbc_free_statement(Statement), !,
+                    assert( total_count_res(user(A), rated_negative, range(Start, End), TC) ).
 
