@@ -17,20 +17,22 @@ open_db  :- odbc_connect(srs, _, [ alias(srs), open(once) ]).
 
 % Check if 20 minutes from the last update are passed
 populate :- open_db, odbc_query(srs,
-                'SELECT EXTRACT(EPOCH FROM NOW() - "timestamp")::INT, "timestamp" FROM srs_data WHERE "key" = \'YEARLY_LAST_UPDATE\'',
-                row(ElapsedTime, _), [ types([integer, integer]) ]),
+                'SELECT EXTRACT(EPOCH FROM NOW() - "timestamp")::INT, "timestamp" FROM srs_data WHERE "key" = \'LAST_UPDATE\'',
+                row(ElapsedTime, LastUpdate), [ types([integer, integer]) ]),
                 ElapsedTime >= 1200 , % if its true, populate
-                write('Computing weights for dates between yearly_last_update and NOW'), nl,
-                write('Annual weights:'), nl, nl,
-                findall(
-                    (user(A), tag(T), year(Year)),
-                    classify(user(A), tag(T), year(Year)), L), !,
+                write('Computing weights for dates between '), write(LastUpdate), write(' and NOW'), nl,
+                get_time(Now),
+                % Avoid cartesian product searching only over existing user activities TODO v
+                setof((user(A), tag(T)), (
+                        classify(user(A), tag(T), range(LastUpdate, Now)) ;
+                        search(user(A), tag(T), range(LastUpdate, Now)) %; do for rated, commet, ecc
+                    ), L), !,
                         %get_time(Today), YearAgo is Today - 31536000,
                         %write('Today: '), write(Today), write(' Year ago: '), write(YearAgo), nl,
                     % For every user(A), compute tag frequency in the year(tag) and insert in srs db
-                    topic_value(L),
+                    topic_value(L, range(LastUpdate, Now)),
                     % Save NOW in last_update
-                    odbc_query(srs,'UPDATE srs_data SET "timestamp" = NOW() WHERE "key" = \'YEARLY_LAST_UPDATE\''),
+                    odbc_query(srs,'UPDATE srs_data SET "timestamp" = NOW() WHERE "key" = \'LAST_UPDATE\''),
                     close_db.
                 
                 %filter_tag(_, _, _, [], _).
@@ -41,30 +43,45 @@ populate :- open_db, odbc_query(srs,
 frequency(_ , 0, 0) :- !.
 frequency(Num, Den, Freq) :- Freq is Num / Den.
 
-frequency(user(A), What, range(Start, End), Frequency) :- functor(What, Action, _),
-    count(user(A), What, range(Start, End), TagCountInRange), write(What), write(' count (in range): '), write(TagCountInRange), nl,
-    count(user(A), Action, range(Start, End), TotalTagCountInRange), write('Total count (in range): '), write(TotalTagCountInRange), nl,
-    frequency(TagCountInRange, TotalTagCountInRange, Frequency), write('Tagged Frequency: '), write(Frequency), nl.
+frequency(user(A), What, range(Start, End), Frequency) :-
+    functor(What, Action, _),
+    count(user(A), What,   range(Start, End), CountInRange),      write(What), write(' count (in range): '), write(CountInRange), nl,
+    count(user(A), Action, range(Start, End), TotalCountInRange), write('Total count (in range): '),         write(TotalCountInRange), nl,
+    frequency(CountInRange, TotalCountInRange, Frequency),        write('Tagged Frequency: '),               write(Frequency), nl.
 
-% use findall (or bagof or setof ?)  to get all user(A), What, range, Frequency and store V
+%test
+all_zero([X]):- X =:= 0, !.
+all_zero([H|T]) :- H =:= 0, !, all_zero(T).
 
-topic_value([]) :- !.
-topic_value([(user(A), tag(T), year(Year))|Tail]) :-
-    write('Tag Year  '), write(Year), nl, write(user(A)), nl,
-    date_time_stamp(date(Year, 1, 1), Start), date_time_stamp(date(Year, 12, 31, 23, 59, 60.0, 0, _, _), End),
-    frequency(user(A), tagged(tag(T)), range(Start, End), TagFrequency), % always <> 0
-    frequency(user(A), searched(tag(T)), range(Start, End), SearchFrequency),
+insert_topic_value(user(A), Date, tag(T), Frequencies) :- 
+    Frequencies = [
+        TagFrequency, SearchFrequency, PositiveRateFrequency, NegativeRateFrequency, CommentFrequency
+    ], odbc_prepare(srs,
+    'INSERT INTO user_topic_frequencies(
+        "topic", "update_date", "user", "tagged", "searched",
+        "rated_positive", "rated_negative", "commented")
+        VALUES(lower(?), ?, ?, ?, ? ,?, ?, ?)', [
+        varchar(70), float > timestamp, bigint, real,
+        real, real, real, real
+    ], Statement), !, 
+    odbc_execute(Statement, [
+        T, Date, A, TagFrequency, SearchFrequency, PositiveRateFrequency,
+        NegativeRateFrequency, CommentFrequency
+    ]),
+    odbc_free_statement(Statement), !.
+
+topic_value([],_) :- !.
+topic_value([(user(A), tag(T))|Tail], range(Start, End)) :-
+    write(user(A)), nl, 
+    frequency(user(A), tagged(tag(T)),         range(Start, End), TagFrequency),
+    frequency(user(A), searched(tag(T)),       range(Start, End), SearchFrequency),
     frequency(user(A), rated_positive(tag(T)), range(Start, End), PositiveRateFrequency),
-    frequency(user(A), rated_negativetag(T)), range(Start, End), NegativeRateFrequency),
-    frequency(user(A), commented(tag(T)), range(Start, End), CommentFrequency),
-    % Restore after checking everything works
-    odbc_prepare(srs,
-        'INSERT INTO yearly_user_topic_frequency("topic", "year", "user", "tagged", "rated_positive", "rated_negative", "commented", "searched") VALUES(lower(?), ?, ?, ?, ? ,?, ?, ?)',
-        [varchar(70), integer, bigint, real, real, real, real, real], Statement),
-    odbc_execute(Statement, [T, Year, A, TagFrequency, PositiveRateFrequency, NegativeRateFrequency, CommentFrequency, SearchFrequency], affected(AffectedRow)),
-    AffectedRow =:= 1,
-    odbc_free_statement(Statement), !,
-    topic_value(Tail).
+    frequency(user(A), rated_negative(tag(T)), range(Start, End), NegativeRateFrequency),
+    frequency(user(A), commented(tag(T)),      range(Start, End), CommentFrequency),
+    insert_topic_value(user(A), End, tag(T), [
+        TagFrequency, SearchFrequency, PositiveRateFrequency, NegativeRateFrequency, CommentFrequency
+    ]),
+    topic_value(Tail, range(Start, End)).
 
 % test
 find_duplicate([H|T]) :- not(member(H, T)).
@@ -85,8 +102,5 @@ base(Year, 100) :- get_date_time_value(year, Actual), Actual =< Year,
 
 base(Year, B)   :- NextYear is Year + 1, base(NextYear, NextBase), B is NextBase / 2,
                     assert(base_res(Year, B)).
-
-% TODO: find a good formula to calculate the value.
-% TODO: use different tables to store different informations 
 
 close_db :- odbc_disconnect(srs).

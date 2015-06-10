@@ -43,11 +43,15 @@ createdb -U postgres -O srs srs
 tmp=$(mktemp)
 
 cat <<EOF > $tmp
-CREATE TABLE yearly_user_topic_frequency(
+CREATE TABLE user_topic_frequencies(
     "topic"     character varying(70) NOT NULL,
-    "year"      int NOT NULL,
+    "update_date" timestamp(0) without time zone NOT NULL,
     "user"      bigint NOT NULL,
-    "frequency" real DEFAULT 0.0 NOT NULL
+    "tagged" real DEFAULT 0.0 NOT NULL,
+    "rated_positive" real DEFAULT 0.0 NOT NULL,
+    "rated_negative" real DEFAULT 0.0 NOT NULL,
+    "commented" real DEFAULT 0.0 NOT NULL,
+    "searched" real DEFAULT 0.0 NOT NULL
 );
 
 CREATE TABLE srs_data (
@@ -56,7 +60,7 @@ CREATE TABLE srs_data (
     "value" varchar(100)
 );
 
-INSERT INTO srs_data("key", "timestamp") VALUES('YEARLY_LAST_UPDATE', to_timestamp(0));
+INSERT INTO srs_data("key", "timestamp") VALUES('LAST_UPDATE', to_timestamp(0));
 EOF
 
 psql -d srs -U srs < $tmp

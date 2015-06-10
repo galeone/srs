@@ -8,4 +8,4 @@ topic_value(searched, 1.0).
 topic_value(tagged, 1.0).
 topic_value(rated_positive, 1.0).
 topic_value(rated_negative, 1.0).
-topic_value(commented_on, 1.0).
+topic_value(commented, 1.0).
