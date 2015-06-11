@@ -2,7 +2,7 @@
 
 :- module(nerdz, [
             name/1, follow/3, bookmark/3, vote/5,
-            comment/4, silent/4, blacklist/3, lurk/4,
+            comment/4, comment /3, silent/4, blacklist/3, lurk/4,
             mention/4, classify/4, classify/3, count/4,
             search/3, users/1, tags/1
         ]).
@@ -183,7 +183,7 @@ classify(user(A), project_post(P), tag(Tag), Timestamp) :- open_db, odbc_query(n
                             types([integer, integer, atom, integer])
                         ]).
 
-% user(A) classified posts with tag(t) in Timestamp
+% user(A) classified posts with tag(t) in range(Start, End)
 classify(user(A), tag(T), range(Start, End)) :- !, open_db, odbc_prepare(nerdz,
                         'SELECT DISTINCT pc.from, pc.tag
                         FROM posts_classification pc
@@ -200,7 +200,7 @@ classify(user(A), tag(T), range(Start, End)) :- !, open_db, odbc_prepare(nerdz,
                         ]), !,
                         odbc_execute(Statement, [Start, End], row(A, T)).
 
-% user(A) sarched tag(T) the Timestamp
+% user(A) sarched tag(T) in range(Start, End)
 search(user(A), tag(T), range(Start, End)) :- !, open_db, odbc_prepare(nerdz,
                         'SELECT DISTINCT s."from", s."value"
                         FROM searches s
@@ -216,15 +216,37 @@ search(user(A), tag(T), range(Start, End)) :- !, open_db, odbc_prepare(nerdz,
                         ]), !,
                         odbc_execute(Statement, [Start, End], row(A, T)).
 
-% user(A) sarched tag(T) in range(Start, End)
-search(user(A), tag(T), range(Start, End)) :- open_db, odbc_prepare(nerdz,
-                        'SELECT DISTINCT "from", "value" FROM searches WHERE "time" >= ? AND "time" <= ?',
-                        [float > timestamp, float > timestamp], Statement,[
-                            types([integer, atom])
-                        ]), !, 
-                        odbc_execute(Statement, [Start, End], row(A, T)).
 
-% TC is the number of times tag(T) has been used by user(A) in range(Start, End)
+% user(A) commented in something taggeg with tag(T) in range(Start, End)
+comment(user(A), tag(T), range(Start, End)) :- !, open_db, odbc_prepare(nerdz,
+                        'SELECT DISTINCT t.from, t.tag FROM (
+                                SELECT MAX(c.time) AS time, c.from, lower(pc.tag) AS tag
+                                FROM posts_classification pc
+                                INNER JOIN comments c ON c.hpid = pc.u_hpid
+                                GROUP BY lower(pc."tag"), c.from, pc.tag
+                                HAVING max(c.time) >= ? AND max(c.time) <= ?
+                            ) AS t
+                         UNION DISTINCT
+                             SELECT DISTINCT t.from, t.tag FROM (
+                                 SELECT MAX(gc.time) AS time, gc.from, lower(pc.tag) AS tag
+                                 FROM posts_classification pc
+                                 INNER JOIN groups_comments gc ON gc.hpid = pc.g_hpid
+                                 GROUP BY lower(pc."tag"), gc.from
+                                 HAVING max(gc.time) >= ? AND max(gc.time) <= ?
+                        ) AS t', [
+                            float > timestamp, float > timestamp,
+                            float > timestamp, float > timestamp
+                        ], Statement, [
+                            types([integer, atom])
+                        ]), !,
+                        odbc_execute(Statement, [
+                            Start, End,
+                            Start, End
+                        ], row(A, T)).
+
+% user(A) rated something in a post tagged with tag(T) in range(Start, End) TODO
+
+%% TC is the number of times tag(T) has been used by user(A) in range(Start, End)
 count(user(A), tagged(tag(T)), range(Start, End), TC) :- open_db, odbc_prepare(nerdz,
                         'SELECT COUNT(id) FROM posts_classification WHERE lower("tag") = lower(?) AND
                         "from" = ? AND

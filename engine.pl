@@ -25,7 +25,9 @@ populate :- open_db, odbc_query(srs,
                 % Avoid cartesian product searching only over existing user activities TODO v
                 setof((user(A), tag(T)), (
                         classify(user(A), tag(T), range(LastUpdate, Now)) ;
-                        search(user(A), tag(T), range(LastUpdate, Now)) %; do for rated, commet, ecc
+                        search(user(A),   tag(T), range(LastUpdate, Now)) ;
+                        rated(user(A),    tag(T), range(LastUpdate, Now)) ; % positive and negative
+                        comment(user(A),  tag(T), range(LastUpdate, Now))
                     ), L), !,
                         %get_time(Today), YearAgo is Today - 31536000,
                         %write('Today: '), write(Today), write(' Year ago: '), write(YearAgo), nl,
