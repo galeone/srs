@@ -186,7 +186,7 @@ classify(user(A), project_post(P), tag(Tag), Timestamp) :- open_db, odbc_query(n
 
 % user(A) classified posts with tag(t) in range(Start, End)
 classify(user(A), tag(T), range(Start, End)) :- open_db, odbc_prepare(nerdz,
-                        'SELECT DISTINCT pc.from, pc.tag
+                        'SELECT DISTINCT pc.from, LOWER(pc.tag)
                         FROM posts_classification pc
                         INNER JOIN (
                             SELECT MAX("time") as time, lower("tag") as tag, "from"
@@ -203,7 +203,7 @@ classify(user(A), tag(T), range(Start, End)) :- open_db, odbc_prepare(nerdz,
 
 % user(A) sarched tag(T) in range(Start, End)
 search(user(A), tag(T), range(Start, End)) :- open_db, odbc_prepare(nerdz,
-                        'SELECT DISTINCT s."from", s."value"
+                        'SELECT DISTINCT s."from", LOWER(s."value")
                         FROM searches s
                         INNER JOIN (
                             SELECT MAX("time") as time, lower("value") as value, "from"
@@ -248,31 +248,35 @@ comment(user(A), tag(T), range(Start, End)) :- open_db, odbc_prepare(nerdz,
 % user(A) rated something in a post tagged with tag(T) in range(Start, End) TODO
 rated(user(A), tag(T), range(Start, End)) :- !, open_db, odbc_prepare(nerdz,
                         'WITH th("tag","from") as (
-                            SELECT pc.tag, thumbs.from
+                            SELECT LOWER(pc.tag), thumbs.from
                             FROM posts_classification pc
                             INNER JOIN  thumbs ON thumbs.hpid = pc.u_hpid AND
                             thumbs.time >=  ? AND
                             thumbs.time <= ?
+                            GROUP BY LOWER(pc.tag), thumbs.from
                         ), gth("tag","from") as (
-                            SELECT pc.tag, groups_thumbs.from
+                            SELECT LOWER(pc.tag), groups_thumbs.from
                             FROM posts_classification pc
                             INNER JOIN  groups_thumbs ON groups_thumbs.hpid = pc.g_hpid AND
                             groups_thumbs.time >= ? AND
                             groups_thumbs.time <= ?
+                            GROUP BY LOWER(pc.tag), groups_thumbs.from
                         ), cth("tag","from") as (
-                            SELECT pc.tag, comment_thumbs.from
+                            SELECT LOWER(pc.tag), comment_thumbs.from
                             FROM posts_classification pc
                             INNER JOIN  comments ON pc.u_hpid = comments.hpid
                             INNER JOIN  comment_thumbs ON comment_thumbs.hcid = comments.hcid AND
                             comment_thumbs.time >= ? AND
                             comment_thumbs.time <= ?
+                            GROUP BY LOWER(pc.tag), comment_thumbs.from
                         ), gcth("tag","from") as (
-                            SELECT pc.tag, groups_comment_thumbs.from
+                            SELECT LOWER(pc.tag), groups_comment_thumbs.from
                             FROM posts_classification pc
                             INNER JOIN  groups_comments ON pc.g_hpid = groups_comments.hpid
                             INNER JOIN  groups_comment_thumbs ON groups_comment_thumbs.hcid = groups_comments.hcid AND
                             groups_comment_thumbs.time >= ? AND
                             groups_comment_thumbs.time <= ?
+                            GROUP BY LOWER(pc.tag), groups_comment_thumbs.from
                         )
                         SELECT "tag", "from" FROM th
                             UNION DISTINCT
@@ -324,7 +328,7 @@ count(user(A), commented(tag(T)), range(Start, End), TC) :- open_db, odbc_prepar
                         comments.from = ? AND
                         comments.time >= ? AND
                         comments.time <= ?
-                        WHERE       LOWER(pc.tag) = LOWER(?)
+                        WHERE LOWER(pc.tag) = LOWER(?)
                     ), gc(c) as (
                         SELECT COUNT(groups_comments.hcid)
                         FROM posts_classification pc
@@ -332,7 +336,7 @@ count(user(A), commented(tag(T)), range(Start, End), TC) :- open_db, odbc_prepar
                         groups_comments.from = ? AND
                         groups_comments.time >= ? AND
                         groups_comments.time <= ?
-                        WHERE       LOWER(pc.tag) = LOWER(?)
+                        WHERE LOWER(pc.tag) = LOWER(?)
                     )
                     SELECT gc.c + uc.c FROM gc, uc',
                     [
@@ -356,7 +360,7 @@ count(user(A), rated_positive(tag(T)), range(Start, End), TC) :- open_db, odbc_p
                             thumbs.from = ? AND
                             thumbs.time >= ? AND
                             thumbs.time <= ?
-                            WHERE       LOWER(pc.tag) = LOWER(?)
+                            WHERE LOWER(pc.tag) = LOWER(?)
                         ), gth(c) as (
                             SELECT COUNT(groups_thumbs.vote)
                             FROM posts_classification pc
@@ -365,7 +369,7 @@ count(user(A), rated_positive(tag(T)), range(Start, End), TC) :- open_db, odbc_p
                             groups_thumbs.from = ? AND
                             groups_thumbs.time >= ? AND
                             groups_thumbs.time <= ?
-                            WHERE       LOWER(pc.tag) = LOWER(?)
+                            WHERE LOWER(pc.tag) = LOWER(?)
                         ), cth(c) as (
                             SELECT COUNT(comment_thumbs.vote)
                             FROM posts_classification pc
@@ -375,7 +379,7 @@ count(user(A), rated_positive(tag(T)), range(Start, End), TC) :- open_db, odbc_p
                             comment_thumbs.from = ? AND
                             comment_thumbs.time >= ? AND
                             comment_thumbs.time <= ?
-                            WHERE       LOWER(pc.tag) = LOWER(?)
+                            WHERE LOWER(pc.tag) = LOWER(?)
                         ), gcth(c) as (
                             SELECT COUNT(groups_comment_thumbs.vote)
                             FROM posts_classification pc
@@ -385,7 +389,7 @@ count(user(A), rated_positive(tag(T)), range(Start, End), TC) :- open_db, odbc_p
                             groups_comment_thumbs.from = ? AND
                             groups_comment_thumbs.time >= ? AND
                             groups_comment_thumbs.time <= ?
-                            WHERE       LOWER(pc.tag) = LOWER(?)
+                            WHERE LOWER(pc.tag) = LOWER(?)
                         )
                         SELECT th.c + gth.c + cth.c + gcth.c FROM th, gth, cth, gcth',
                         [
@@ -412,7 +416,7 @@ count(user(A), rated_negative(tag(T)), range(Start, End), TC) :- open_db, odbc_p
                             thumbs.from = ? AND
                             thumbs.time >=  ? AND
                             thumbs.time <= ?
-                            WHERE       LOWER(pc.tag) = LOWER(?)
+                            WHERE LOWER(pc.tag) = LOWER(?)
                         ), gth(c) as (
                             SELECT COUNT(groups_thumbs.vote)
                             FROM posts_classification pc
@@ -421,7 +425,7 @@ count(user(A), rated_negative(tag(T)), range(Start, End), TC) :- open_db, odbc_p
                             groups_thumbs.from = ? AND
                             groups_thumbs.time >= ? AND
                             groups_thumbs.time <= ?
-                            WHERE       LOWER(pc.tag) = LOWER(?)
+                            WHERE LOWER(pc.tag) = LOWER(?)
                         ), cth(c) as (
                             SELECT COUNT(comment_thumbs.vote)
                             FROM posts_classification pc
@@ -431,7 +435,7 @@ count(user(A), rated_negative(tag(T)), range(Start, End), TC) :- open_db, odbc_p
                             comment_thumbs.from = ? AND
                             comment_thumbs.time >= ? AND
                             comment_thumbs.time <= ?
-                            WHERE       LOWER(pc.tag) = LOWER(?)
+                            WHERE LOWER(pc.tag) = LOWER(?)
                         ), gcth(c) as (
                             SELECT COUNT(groups_comment_thumbs.vote)
                             FROM posts_classification pc
@@ -441,7 +445,7 @@ count(user(A), rated_negative(tag(T)), range(Start, End), TC) :- open_db, odbc_p
                             groups_comment_thumbs.from = ? AND
                             groups_comment_thumbs.time >= ? AND
                             groups_comment_thumbs.time <= ?
-                            WHERE       LOWER(pc.tag) = LOWER(?)
+                            WHERE LOWER(pc.tag) = LOWER(?)
                         )
                         SELECT th.c + gth.c + cth.c + gcth.c FROM th, gth, cth, gcth',
                         [
@@ -521,7 +525,7 @@ count(user(A), rated_positive, range(Start, End), TC) :- open_db, odbc_prepare(n
                         INNER JOIN  thumbs ON thumbs.hpid = pc.u_hpid AND
                         thumbs.vote = 1 AND
                         thumbs.from = ? AND
-                        thumbs.time >=  ? AND
+                        thumbs.time >= ? AND
                         thumbs.time <= ?
                     ), gth(c) as (
                         SELECT COUNT(groups_thumbs.vote)
@@ -534,8 +538,8 @@ count(user(A), rated_positive, range(Start, End), TC) :- open_db, odbc_prepare(n
                     ), cth(c) as (
                         SELECT COUNT(comment_thumbs.vote)
                         FROM posts_classification pc
-                        INNER JOIN  comments ON pc.u_hpid = comments.hpid
-                        INNER JOIN  comment_thumbs ON comment_thumbs.hcid = comments.hcid AND
+                        INNER JOIN comments ON pc.u_hpid = comments.hpid
+                        INNER JOIN comment_thumbs ON comment_thumbs.hcid = comments.hcid AND
                         comment_thumbs.vote = 1 AND
                         comment_thumbs.from = ? AND
                         comment_thumbs.time >= ? AND
@@ -543,8 +547,8 @@ count(user(A), rated_positive, range(Start, End), TC) :- open_db, odbc_prepare(n
                     ), gcth(c) as (
                         SELECT COUNT(groups_comment_thumbs.vote)
                         FROM posts_classification pc
-                        INNER JOIN  groups_comments ON pc.g_hpid = groups_comments.hpid
-                        INNER JOIN  groups_comment_thumbs ON groups_comment_thumbs.hcid = groups_comments.hcid AND
+                        INNER JOIN groups_comments ON pc.g_hpid = groups_comments.hpid
+                        INNER JOIN groups_comment_thumbs ON groups_comment_thumbs.hcid = groups_comments.hcid AND
                         groups_comment_thumbs.vote = 1 AND
                         groups_comment_thumbs.from = ? AND
                         groups_comment_thumbs.time >= ? AND
@@ -572,7 +576,7 @@ count(user(A), rated_negative, range(Start, End), TC) :- open_db, odbc_prepare(n
                     'WITH th(c) as (
                         SELECT COUNT(thumbs.counter)
                         FROM posts_classification pc
-                        INNER JOIN  thumbs ON thumbs.hpid = pc.u_hpid AND
+                        INNER JOIN thumbs ON thumbs.hpid = pc.u_hpid AND
                         thumbs.vote = -1 AND
                         thumbs.from = ? AND
                         thumbs.time >=  ? AND
@@ -580,7 +584,7 @@ count(user(A), rated_negative, range(Start, End), TC) :- open_db, odbc_prepare(n
                     ), gth(c) as (
                         SELECT COUNT(groups_thumbs.vote)
                         FROM posts_classification pc
-                        INNER JOIN  groups_thumbs ON groups_thumbs.hpid = pc.g_hpid AND
+                        INNER JOIN groups_thumbs ON groups_thumbs.hpid = pc.g_hpid AND
                         groups_thumbs.vote = -1 AND
                         groups_thumbs.from = ? AND
                         groups_thumbs.time >= ? AND
@@ -588,8 +592,8 @@ count(user(A), rated_negative, range(Start, End), TC) :- open_db, odbc_prepare(n
                     ), cth(c) as (
                         SELECT COUNT(comment_thumbs.vote)
                         FROM posts_classification pc
-                        INNER JOIN  comments ON pc.u_hpid = comments.hpid
-                        INNER JOIN  comment_thumbs ON comment_thumbs.hcid = comments.hcid AND
+                        INNER JOIN comments ON pc.u_hpid = comments.hpid
+                        INNER JOIN comment_thumbs ON comment_thumbs.hcid = comments.hcid AND
                         comment_thumbs.vote = -1 AND
                         comment_thumbs.from = ? AND
                         comment_thumbs.time >= ? AND
@@ -597,8 +601,8 @@ count(user(A), rated_negative, range(Start, End), TC) :- open_db, odbc_prepare(n
                     ), gcth(c) as (
                         SELECT COUNT(groups_comment_thumbs.vote)
                         FROM posts_classification pc
-                        INNER JOIN  groups_comments ON pc.g_hpid = groups_comments.hpid
-                        INNER JOIN  groups_comment_thumbs ON groups_comment_thumbs.hcid = groups_comments.hcid AND
+                        INNER JOIN groups_comments ON pc.g_hpid = groups_comments.hpid
+                        INNER JOIN groups_comment_thumbs ON groups_comment_thumbs.hcid = groups_comments.hcid AND
                         groups_comment_thumbs.vote = -1 AND
                         groups_comment_thumbs.from = ? AND
                         groups_comment_thumbs.time >= ? AND

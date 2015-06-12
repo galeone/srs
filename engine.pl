@@ -10,51 +10,45 @@ open_db  :- odbc_connect(srs, _, [ alias(srs), open(once) ]).
 
 % Compute the relation value between topics and users.
 % Its a cartesian product (topics X users). To reduce srs database size
-% we store only existing relations (user(A) talks about tag(T)).
-% If we don't find any match, the value is 0.
+% we store only existing relations (user(A) <action> tag(T)).
 
-% Populate the db every 20 minutes (with new values)
+% Populate the db every 20 minutes (with new values): TODO configurable time
 
-% Check if 20 minutes from the last update are passed
+% Populate/0 succed only of the right amount of time elapsed
 populate :- open_db, odbc_query(srs,
                 'SELECT EXTRACT(EPOCH FROM NOW() - "timestamp")::INT, "timestamp" FROM srs_data WHERE "key" = \'LAST_UPDATE\'',
                 row(ElapsedTime, LastUpdate), [ types([integer, integer]) ]),
                 ElapsedTime >= 1200 , % if its true, populate
                 write('Computing weights for dates between '), write(LastUpdate), write(' and NOW'), nl,
                 get_time(Now),
-                % Avoid cartesian product searching only over existing user activities TODO v
+                % Avoid cartesian product searching only over existing user activities
                 setof((user(A), tag(T)), (
                         classify(user(A), tag(T), range(LastUpdate, Now)) ;
                         search(user(A),   tag(T), range(LastUpdate, Now)) ;
                         rated(user(A),    tag(T), range(LastUpdate, Now)) ; % positive and negative
                         comment(user(A),  tag(T), range(LastUpdate, Now))
                     ), L), !,
-                        %get_time(Today), YearAgo is Today - 31536000,
-                        %write('Today: '), write(Today), write(' Year ago: '), write(YearAgo), nl,
-                    % For every user(A), compute tag frequency in the year(tag) and insert in srs db
+                    % For every user(A), compute frequencies in range(LastUpdate, Now) and save.
                     topic_value(L, range(LastUpdate, Now)),
                     % Save NOW in last_update
                     odbc_query(srs,'UPDATE srs_data SET "timestamp" = NOW() WHERE "key" = \'LAST_UPDATE\''),
                     close_db.
                 
-                %filter_tag(_, _, _, [], _).
-                %filter_tag(user(A), tag(T), Year, [(user(B), post(P), tag(TT), Timestamp)|Tail], [(user(B), post(P), tag(TT), Timestamp)|NewList]) :- 
-                %    (not(year(Timestamp, Year)), !; A \= B, !; T \= TT, !), !, filter_tag(user(A), tag(T), Year, Tail, NewList).
-                %filter_tag(user(A), tag(T), Year, [_|Tail], NewList) :- !, filter_tag(user(A), tag(T), Year, Tail, NewList).
-                %
+% Frequency/3
+% f(Num, Den) = 0       if Den is 0
+%               Num/Den otherwise 
 frequency(_ , 0, 0) :- !.
 frequency(Num, Den, Freq) :- Freq is Num / Den.
 
+% Frequency/4
+% Compute the frequency of action What, done by user(A), in range(Start, End)
 frequency(user(A), What, range(Start, End), Frequency) :-
     functor(What, Action, _),
     count(user(A), What,   range(Start, End), CountInRange),      write(What), write(' count (in range): '), write(CountInRange), nl,
     count(user(A), Action, range(Start, End), TotalCountInRange), write('Total count (in range): '),         write(TotalCountInRange), nl,
     frequency(CountInRange, TotalCountInRange, Frequency),        write('Tagged Frequency: '),               write(Frequency), nl.
 
-%test
-all_zero([X]):- X =:= 0, !.
-all_zero([H|T]) :- H =:= 0, !, all_zero(T).
-
+% insert_topic_value/4, save the computed actions [frequencies] of user(A) into srs db, computed at date Date
 insert_topic_value(user(A), Date, tag(T), Frequencies) :- 
     Frequencies = [
         TagFrequency, SearchFrequency, PositiveRateFrequency, NegativeRateFrequency, CommentFrequency
@@ -72,6 +66,8 @@ insert_topic_value(user(A), Date, tag(T), Frequencies) :-
     ]),
     odbc_free_statement(Statement), !.
 
+% topic_value/2
+% for every couple (user(A), tag(T)) in the input list, compute frequency of actions in range(Start, End)
 topic_value([],_) :- !.
 topic_value([(user(A), tag(T))|Tail], range(Start, End)) :-
     write(user(A)), nl, 
@@ -86,8 +82,17 @@ topic_value([(user(A), tag(T))|Tail], range(Start, End)) :-
     topic_value(Tail, range(Start, End)).
 
 % test
-find_duplicate([H|T]) :- not(member(H, T)).
+remove_duplicates([],[]) :- !.
+remove_duplicates([H|T], D) :- member(H, T), !, remove_duplicates(T, D).
+remove_duplicates([H|T], [H|D]) :- !, remove_duplicates(T, D).
 
+contains_duplicate([]).
+contains_duplicate([H|T]) :- not(member(H, T)), contains_duplicate(T).
+
+all_zero([X]):- X =:= 0, !.
+all_zero([H|T]) :- H =:= 0, !, all_zero(T).
+
+% Utility predicates
 get_date_time_value(Key, Value) :-
     get_time(Stamp),
     stamp_date_time(Stamp, DateTime, local),
@@ -97,6 +102,7 @@ get_date_time_vakye(Stamp, Key, Value) :-
     stamp_date_time(Stamp, DateTime, local),
     date_time_value(Key, DateTime, Value).
 
+% Base predicate (prolog or change language?)
 :- dynamic base_res/2.
 base(Year, B)   :- base_res(Year, B), !.
 base(Year, 100) :- get_date_time_value(year, Actual), Actual =< Year,
