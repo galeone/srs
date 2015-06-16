@@ -65,3 +65,7 @@ EOF
 
 psql -d srs -U srs < $tmp
 rm $tmp
+
+cd c
+swipl-ld -o srs srs.c ../prolog/srs.pl -O -g -Wall
+./srs

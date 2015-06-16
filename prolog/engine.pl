@@ -1,8 +1,12 @@
 % Import the required database and ask the engine to do the work
 % Do you want to use srs with an other social network? Define a module that exports
 % the same predicate of nerdz and replace the line below
+:- module(engine, [
+    open_db/0, populate/0, close_db/0, base/2
+    ]).
+
 :- use_module(nerdz).
-consult(config).
+:- consult(config).
 
 % populating the srs database, computing the cost for each item
 
@@ -18,21 +22,24 @@ open_db  :- odbc_connect(srs, _, [ alias(srs), open(once) ]).
 populate :- open_db, odbc_query(srs,
                 'SELECT EXTRACT(EPOCH FROM NOW() - "timestamp")::INT, "timestamp" FROM srs_data WHERE "key" = \'LAST_UPDATE\'',
                 row(ElapsedTime, LastUpdate), [ types([integer, integer]) ]),
-                ElapsedTime >= 1200 , % if its true, populate
+                ElapsedTime >= 1200 , !, % if its true, populate
                 write('Computing weights for dates between '), write(LastUpdate), write(' and NOW'), nl,
                 get_time(Now),
                 % Avoid cartesian product searching only over existing user activities
-                setof((user(A), tag(T)), (
+                (
+                    setof((user(A), tag(T)), (
                         classify(user(A), tag(T), range(LastUpdate, Now)) ;
                         search(user(A),   tag(T), range(LastUpdate, Now)) ;
                         rated(user(A),    tag(T), range(LastUpdate, Now)) ; % positive and negative
                         comment(user(A),  tag(T), range(LastUpdate, Now))
-                    ), L), !,
-                    % For every user(A), compute frequencies in range(LastUpdate, Now) and save.
-                    topic_value(L, range(LastUpdate, Now)),
-                    % Save NOW in last_update
-                    odbc_query(srs,'UPDATE srs_data SET "timestamp" = NOW() WHERE "key" = \'LAST_UPDATE\''),
-                    close_db.
+                    ), L) ; % setof fails if there's not data, but i need to update the timestamp next
+                   L = []
+                ), !,
+                % For every user(A), compute frequencies in range(LastUpdate, Now) and save.
+                topic_value(L, range(LastUpdate, Now)),
+                % Save NOW in last_update
+                odbc_query(srs,'UPDATE srs_data SET "timestamp" = NOW() WHERE "key" = \'LAST_UPDATE\''),
+                close_db.
                 
 % Frequency/3
 % f(Num, Den) = 0       if Den is 0
@@ -42,11 +49,14 @@ frequency(Num, Den, Freq) :- Freq is Num / Den.
 
 % Frequency/4
 % Compute the frequency of action What, done by user(A), in range(Start, End)
-frequency(user(A), What, range(Start, End), Frequency) :-
+frequency(user(A), What, range(Start, End), AdjFrequency) :-
     functor(What, Action, _),
+    % get adjustement coefficient from config
+    action_coefficient(Action, Adj),
     count(user(A), What,   range(Start, End), CountInRange),      write(What), write(' count (in range): '), write(CountInRange), nl,
     count(user(A), Action, range(Start, End), TotalCountInRange), write('Total count (in range): '),         write(TotalCountInRange), nl,
-    frequency(CountInRange, TotalCountInRange, Frequency),        write('Tagged Frequency: '),               write(Frequency), nl.
+    frequency(CountInRange, TotalCountInRange, Frequency),        write('Frequency: '),                      write(Frequency), nl,
+    AdjFrequency is Frequency * Adj,                              write('Adjusted Frequency: '),             write(AdjFrequency), nl.
 
 % insert_topic_value/4, save the computed actions [frequencies] of user(A) into srs db, computed at date Date
 insert_topic_value(user(A), Date, tag(T), Frequencies) :- 
