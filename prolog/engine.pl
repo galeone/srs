@@ -19,8 +19,14 @@ open_db  :- odbc_connect(srs, _, [ alias(srs), open(once) ]).
 every_hours(Start, End, [[]])   :- Start >= End, !.
 every_hours(Start, End, [[Start, NewTime]|D]) :- NewTime is Start + 3600, every_hours(NewTime, End, D).
 
-populate([]) :- odbc_query(srs,'UPDATE srs_data SET "timestamp" = NOW() WHERE "key" = \'LAST_UPDATE\''), close_db, !.
-populate([[Begin, End]|Tail]) :- 
+populate([], LastStart) :- odbc_prepare(srs,
+                            'UPDATE srs_data SET "timestamp" = ? WHERE "key" = \'LAST_UPDATE\'', [
+                            float > timestamp],Statement),
+                           odbc_execute(Statement, [ LastStart ] ),
+                           odbc_free_statement(Statement),
+                           close_db, !.
+
+populate([[Begin, End]|Tail], _) :- 
                 write('Computing weights ['), write(Begin), write(','), write(End), write(']'), nl,
                 % Avoid cartesian product searching only over existing user activities
                 (
@@ -33,14 +39,14 @@ populate([[Begin, End]|Tail]) :-
                    L = []
                 ),
                 topic_value(L, range(Begin, End)), !,
-                populate(Tail).
+                populate(Tail, Begin).
 
 % Populate/0 succed only of the right amount of time elapsed
 populate :- open_db, odbc_query(srs,
                 'SELECT "timestamp" FROM srs_data WHERE "key" = \'LAST_UPDATE\'',
                 row(LastUpdate), [ types([integer]) ]),
                 write('Computing weights for every hour between '), write(LastUpdate), write(' and NOW'), nl,
-                get_time(Now), every_hours(LastUpdate, Now, Hours), populate(Hours).
+                get_time(Now), every_hours(LastUpdate, Now, Hours), populate(Hours, LastUpdate).
 
 % Frequency/3
 % f(Num, Den) = 0       if Den is 0

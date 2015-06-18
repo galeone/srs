@@ -4,11 +4,15 @@
 # REQUIRES AT LEAST swi-prolog 7.X.X #
 ######################################
 
+basedir=$(pwd)
+
 cd /tmp
 
 wget https://www.cs.umd.edu/~mount/Projects/KMeans/kmlocal-1.7.2.tar.gz
 tar xvf kmloca*
 cd kmlocal-1.7.2
+
+#TODO
 
 cd -
 mkdir srs
@@ -31,6 +35,17 @@ Username=nerdz
 Password=nerdz
 Protocol=9.3.4
 ReadOnly=yes
+Debug=1
+
+[srs]
+Driver=PostgreSQL Unicode
+Servername=localhost
+Port=5432
+Database=srs
+Username=srs
+Password=srs
+Protocol=9.3.4
+ReadOnly=no
 Debug=1" >> /etc/odbc.ini
 
 echo "[PostgreSQL Unicode]
@@ -46,10 +61,13 @@ rm -rf psqlod*
 createuser -U postgres -D -R -S srs
 createdb -U postgres -O srs srs
 
+cd $basedir
+
 bash populate_db
 
 cd cpp
 swipl-ld -o srs srs.cpp ../prolog/srs.pl -O -g -Wall
+mkdir -p ../bin
 mv srs ../bin
 cd ../bin
 ./srs
