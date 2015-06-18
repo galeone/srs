@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+tmp=$(mktemp)
+
+first_post="to_timestamp(0)";
+#nerdz first post date: 2010-07-06
+
+if [ $# -gt 0 ]; then
+   first_post="'$1'"
+fi
+
+cat <<EOF > $tmp
+CREATE TABLE user_topic_frequencies(
+    "topic"     character varying(70) NOT NULL,
+    "update_date" timestamp(0) without time zone NOT NULL,
+    "user"      bigint NOT NULL,
+    "tagged" real DEFAULT 0.0 NOT NULL,
+    "rated_positive" real DEFAULT 0.0 NOT NULL,
+    "rated_negative" real DEFAULT 0.0 NOT NULL,
+    "commented" real DEFAULT 0.0 NOT NULL,
+    "searched" real DEFAULT 0.0 NOT NULL
+);
+
+CREATE TABLE srs_data (
+    "key" varchar(50) primary key not null,
+    "timestamp" timestamp(0) without time zone,
+    "value" varchar(100)
+);
+
+INSERT INTO srs_data("key", "timestamp") VALUES('LAST_UPDATE', $first_post);
+EOF
+
+psql -d srs -U srs < $tmp
+rm $tmp

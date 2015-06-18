@@ -2,7 +2,7 @@
 % Do you want to use srs with an other social network? Define a module that exports
 % the same predicate of nerdz and replace the line below
 :- module(engine, [
-    open_db/0, populate/0, close_db/0, base/2
+    open_db/0, populate/0, close_db/0, base/2, every_hours/3
     ]).
 
 :- use_module(nerdz).
@@ -16,31 +16,32 @@ open_db  :- odbc_connect(srs, _, [ alias(srs), open(once) ]).
 % Its a cartesian product (topics X users). To reduce srs database size
 % we store only existing relations (user(A) <action> tag(T)).
 
-% Populate the db every 20 minutes (with new values): TODO configurable time
+every_hours(Start, End, [[]])   :- Start >= End, !.
+every_hours(Start, End, [[Start, NewTime]|D]) :- NewTime is Start + 3600, every_hours(NewTime, End, D).
 
-% Populate/0 succed only of the right amount of time elapsed
-populate :- open_db, odbc_query(srs,
-                'SELECT EXTRACT(EPOCH FROM NOW() - "timestamp")::INT, "timestamp" FROM srs_data WHERE "key" = \'LAST_UPDATE\'',
-                row(ElapsedTime, LastUpdate), [ types([integer, integer]) ]),
-                ElapsedTime >= 1200 , !, % if its true, populate
-                write('Computing weights for dates between '), write(LastUpdate), write(' and NOW'), nl,
-                get_time(Now),
+populate([]) :- odbc_query(srs,'UPDATE srs_data SET "timestamp" = NOW() WHERE "key" = \'LAST_UPDATE\''), close_db, !.
+populate([[Begin, End]|Tail]) :- 
+                write('Computing weights ['), write(Begin), write(','), write(End), write(']'), nl,
                 % Avoid cartesian product searching only over existing user activities
                 (
                     setof((user(A), tag(T)), (
-                        classify(user(A), tag(T), range(LastUpdate, Now)) ;
-                        search(user(A),   tag(T), range(LastUpdate, Now)) ;
-                        rated(user(A),    tag(T), range(LastUpdate, Now)) ; % positive and negative
-                        comment(user(A),  tag(T), range(LastUpdate, Now))
+                        classify(user(A), tag(T), range(Begin, End)) ;
+                        search(user(A),   tag(T), range(Begin, End)) ;
+                        rated(user(A),    tag(T), range(Begin, End)) ; % positive and negative
+                        comment(user(A),  tag(T), range(Begin, End))
                     ), L) ; % setof fails if there's not data, but i need to update the timestamp next
                    L = []
-                ), !,
-                % For every user(A), compute frequencies in range(LastUpdate, Now) and save.
-                topic_value(L, range(LastUpdate, Now)),
-                % Save NOW in last_update
-                odbc_query(srs,'UPDATE srs_data SET "timestamp" = NOW() WHERE "key" = \'LAST_UPDATE\''),
-                close_db.
-                
+                ),
+                topic_value(L, range(Begin, End)), !,
+                populate(Tail).
+
+% Populate/0 succed only of the right amount of time elapsed
+populate :- open_db, odbc_query(srs,
+                'SELECT "timestamp" FROM srs_data WHERE "key" = \'LAST_UPDATE\'',
+                row(LastUpdate), [ types([integer]) ]),
+                write('Computing weights for every hour between '), write(LastUpdate), write(' and NOW'), nl,
+                get_time(Now), every_hours(LastUpdate, Now, Hours), populate(Hours).
+
 % Frequency/3
 % f(Num, Den) = 0       if Den is 0
 %               Num/Den otherwise 

@@ -30,9 +30,9 @@ wstring p_get(PlTerm t)
         case PL_TERM:
             {
                 const char *name = t.name();
-                size_t convertedChars = 0;
-                wchar_t *wc_name = new wchar_t[sizeof name];
-                mbstowcs(wc_name, name, sizeof name);
+                size_t len = strlen(name) + 1;
+                wchar_t *wc_name = new wchar_t[len]();
+                mbstowcs(wc_name, name, len);
                 s += wc_name;
                 s += L"(";
                 for(int n=1; n <= t.arity(); n++) {
@@ -54,33 +54,48 @@ int main(int argc, char **argv) {
     PlEngine engine(argc, argv);
 
 #ifdef DEBUG
-    wcout << "[+] prolog engine initizlized with success!" << endl;
+    wcout << L"[+] prolog engine initizlized with success!" << endl;
 #endif
 
     const int arity = 8;
     PlTermv termv(arity);
     PlQuery q("get_weigths",termv);
 
-    wstring term_s[arity];
     // t1
-    int64_t userID;
+    int64_t user;
     //t2
-    char tag[70];
+    wstring tag;
     //t3..t7 // weigths -> to int64_t convert to float
-    int64_t tagged_w, rated_positive_w, rated_negative_w, commented_w, searched_w;
+    double tagged_w, rated_positive_w, rated_negative_w, commented_w, searched_w;
     //t8, Timestamp
-    int64_t timestamp;
+    int64_t timestamp, counter = 0;
+
+#ifdef DEBUG
+    wstring term_s[arity];
+#endif
 
     while(q.next_solution()) {
+        ++counter;
         //http://www.swi-prolog.org/pldoc/man?section=foreign-term-analysis
-        for(size_t i = 0; i < arity; ++i) {
-            term_s[i] = p_get(termv[i]);
+        user = (long)termv[0][1];
+        tag  = p_get(termv[1][1]);
+        tagged_w = (double)termv[2][1];
+        rated_positive_w = (double)termv[3][1];
+        rated_negative_w = (double)termv[4][1];
+        commented_w = (double)termv[5][1];
+        searched_w = (double)termv[6][1];
+        //timestamp ??
+
 #ifdef DEBUG
-            wcout << term_s[i] << " ";
-            if(i == arity - 1) wcout << "\n";
+        wcout << L"user: " << user << "\nTag: " <<tag << "\nTagged: " <<tagged_w <<
+            "\nRated Positive: " << rated_positive_w << "\nRated Negative: " << rated_negative_w <<
+            "\nCommented: " << commented_w << "\nSearched: " << searched_w << "\n";
 #endif
-        }
     }
+
+#ifdef DEBUG
+    wcout << "[+] Total cluster elements: " << counter << endl;
+#endif
 
     PL_halt(EXIT_SUCCESS);
     return EXIT_SUCCESS;

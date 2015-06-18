@@ -5,6 +5,12 @@
 ######################################
 
 cd /tmp
+
+wget https://www.cs.umd.edu/~mount/Projects/KMeans/kmlocal-1.7.2.tar.gz
+tar xvf kmloca*
+cd kmlocal-1.7.2
+
+cd -
 mkdir srs
 cd srs
 # Can't use the latest version. See:
@@ -40,31 +46,7 @@ rm -rf psqlod*
 createuser -U postgres -D -R -S srs
 createdb -U postgres -O srs srs
 
-tmp=$(mktemp)
-
-cat <<EOF > $tmp
-CREATE TABLE user_topic_frequencies(
-    "topic"     character varying(70) NOT NULL,
-    "update_date" timestamp(0) without time zone NOT NULL,
-    "user"      bigint NOT NULL,
-    "tagged" real DEFAULT 0.0 NOT NULL,
-    "rated_positive" real DEFAULT 0.0 NOT NULL,
-    "rated_negative" real DEFAULT 0.0 NOT NULL,
-    "commented" real DEFAULT 0.0 NOT NULL,
-    "searched" real DEFAULT 0.0 NOT NULL
-);
-
-CREATE TABLE srs_data (
-    "key" varchar(50) primary key not null,
-    "timestamp" timestamp(0) without time zone,
-    "value" varchar(100)
-);
-
-INSERT INTO srs_data("key", "timestamp") VALUES('LAST_UPDATE', to_timestamp(0));
-EOF
-
-psql -d srs -U srs < $tmp
-rm $tmp
+bash populate_db
 
 cd cpp
 swipl-ld -o srs srs.cpp ../prolog/srs.pl -O -g -Wall
