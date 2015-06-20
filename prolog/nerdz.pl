@@ -199,7 +199,10 @@ classify(user(A), tag(T), range(Start, End)) :- open_db, odbc_prepare(nerdz,
                         [float > timestamp, float > timestamp], Statement, [
                             types([integer, atom])
                         ]), !,
-                        odbc_execute(Statement, [Start, End], row(A, T)).
+                        (
+                            odbc_execute(Statement, [Start, End], row(A, T)) ;
+                            odbc_free_statement(Statement), !, fail
+                        ).
 
 % user(A) sarched tag(T) in range(Start, End)
 search(user(A), tag(T), range(Start, End)) :- open_db, odbc_prepare(nerdz,
@@ -215,7 +218,10 @@ search(user(A), tag(T), range(Start, End)) :- open_db, odbc_prepare(nerdz,
                         [float > timestamp, float > timestamp], Statement, [
                             types([integer, atom])
                         ]), !,
-                        odbc_execute(Statement, [Start, End], row(A, T)).
+                        (
+                            odbc_execute(Statement, [Start, End], row(A, T)) ;
+                            odbc_free_statement(Statement), !, fail
+                        ).
 
 
 % user(A) commented in something taggeg with tag(T) in range(Start, End)
@@ -240,10 +246,13 @@ comment(user(A), tag(T), range(Start, End)) :- open_db, odbc_prepare(nerdz,
                         ], Statement, [
                             types([integer, atom])
                         ]), !,
-                        odbc_execute(Statement, [
-                            Start, End,
-                            Start, End
-                        ], row(A, T)).
+                        (
+                            odbc_execute(Statement, [
+                                Start, End,
+                                Start, End
+                            ], row(A, T)) ;
+                            odbc_free_statement(Statement), !, fail
+                        ).
 
 % user(A) rated something in a post tagged with tag(T) in range(Start, End) TODO
 rated(user(A), tag(T), range(Start, End)) :- !, open_db, odbc_prepare(nerdz,
@@ -292,12 +301,15 @@ rated(user(A), tag(T), range(Start, End)) :- !, open_db, odbc_prepare(nerdz,
                         ], Statement, [
                             types([atom, integer])
                         ]), !,
-                        odbc_execute(Statement, [
-                            Start, End,
-                            Start, End,
-                            Start, End,
-                            Start, End
-                        ], row(T, A)).
+                        (
+                            odbc_execute(Statement, [
+                                Start, End,
+                                Start, End,
+                                Start, End,
+                                Start, End
+                            ], row(T, A)) ;
+                            odbc_free_statement(Statement), !, fail
+                        ).
 
 %% TC is the number of times tag(T) has been used by user(A) in range(Start, End)
 count(user(A), tagged(tag(T)), range(Start, End), TC) :- open_db, odbc_prepare(nerdz,
