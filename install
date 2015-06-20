@@ -69,5 +69,5 @@ cd cpp
 swipl-ld -o srs srs.cpp ../prolog/srs.pl -O -g -Wall
 mkdir -p ../bin
 mv srs ../bin
-cd ../bin
-./srs
+
+echo "[+] Setup completed"; echo
