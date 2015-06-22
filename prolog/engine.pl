@@ -16,13 +16,13 @@ open_db  :- odbc_connect(srs, _, [ alias(srs), open(once) ]).
 % Its a cartesian product (topics X users). To reduce srs database size
 % we store only existing relations (user(A) <action> tag(T)).
 
-every_hours(Start, End, [[]])   :- Start >= End, !.
+every_hours(Start, End, [])   :- Start >= End, !.
 every_hours(Start, End, [[Start, NewTime]|D]) :- NewTime is Start + 3600, every_hours(NewTime, End, D).
 
-populate([], LastStart) :- odbc_prepare(srs,
+populate([], LastEnd) :- odbc_prepare(srs,
                             'UPDATE srs_data SET "timestamp" = ? WHERE "key" = \'LAST_UPDATE\'', [
                             float > timestamp],Statement),
-                           odbc_execute(Statement, [ LastStart ] ),
+                           odbc_execute(Statement, [ LastEnd ] ),
                            odbc_free_statement(Statement),
                            close_db, !.
 
@@ -39,14 +39,19 @@ populate([[Begin, End]|Tail], _) :-
                    L = []
                 ),
                 topic_value(L, range(Begin, End)), !,
-                populate(Tail, Begin).
+                populate(Tail, End).
 
 % Populate/0 succed only of the right amount of time elapsed
 populate :- open_db, odbc_query(srs,
                 'SELECT "timestamp" FROM srs_data WHERE "key" = \'LAST_UPDATE\'',
                 row(LastUpdate), [ types([integer]) ]),
-                write('Computing weights for every hour between '), write(LastUpdate), write(' and NOW'), nl,
-                get_time(Now), every_hours(LastUpdate, Now, Hours), populate(Hours, LastUpdate).
+                get_time(Now), every_hours(LastUpdate, Now, Hours), populate(Hours, LastUpdate),
+                (
+                    (
+                        Hours \= [] , write('Computing weights for every hour between '), write(LastUpdate), write(' and NOW'), nl
+                    ) ;
+                    !
+                ).
 
 % Frequency/3
 % f(Num, Den) = 0       if Den is 0
