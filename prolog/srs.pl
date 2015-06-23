@@ -16,7 +16,7 @@ get_frequencies(user(A), tag(T), weight(Tagged), weight(RatedPositive), weight(R
         open_db, odbc_query(srs,
         'SELECT "user", "topic", tagged, rated_positive, rated_negative, commented, searched, update_date
         FROM user_topic_frequencies
-        ORDER BY "user", "topic"',
+        ORDER BY "user", "topic", "update_date"',
         row(A,T,Tagged,RatedPositive,RatedNegative,Commented,Searched,Timestamp)).
 
 close :- close_db.
