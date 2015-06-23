@@ -161,26 +161,25 @@ int main(int argc, char **argv) {
         // Per calcolare il peso, prendiamo 
         for(auto const &it : m) {
 #ifdef DEBUG
-            wcout << "[-] Computing monthly weight for pair: " << get<0>(it.first) << ", " << get<1>(it.first) << "\n";
-            wcout << "[-]\tSomma delle frequenze: " << m[it.first][month_counter] << " (mese " << month_counter << ") \n";
-            wcout << "[-]\tNumero occorrenze coppia (nel mese): " << c[it.first] << "\n";
+            wcout << "[-]Computing monthly weight for pair: " << get<0>(it.first) << ", " << get<1>(it.first) << "\n";
+            wcout << "[-]\tFrequencies sum: " << m[it.first][month_counter] << " (month " << month_counter << ") \n";
+            wcout << "[-]\tNumber of pair occurrence (in month): " << c[it.first] << "\n";
             // nell posizione correte (month_counter) della tal coppia, ci metto dentro il risultato
 #endif
-            float exp = m[it.first][month_counter] / (FREQ_NUM * c[it.first]);
+            float den = c[it.first] * FREQ_NUM,
+                  num = m[it.first][month_counter];
+            float exp = den == 0 ? 0 : num/den;
             assert(exp <= 1.0);
             m[it.first][month_counter] = pow(base, exp);
 #ifdef DEBUG
-            wcout << "[-]\tEsponente: " << exp << "\n";
-            wcout << "[-]\tPeso: " << m[it.first][month_counter] << "\n";
+            wcout << "[-]\tExponent: " << exp << "\n";
+            wcout << "[-]\tWeight: " << m[it.first][month_counter] << "\n";
 
 #endif
         }
 
         // svuoto il conteggio delle occorrenze
-        // TODO: capire perché sta cosa (che deve azzerare), se azzerata va a ropere i conteggi futuri
-        for(auto &it : c) {
-            it.second = 0;
-        }
+        c.clear();
         // non m in quanto contiene l'array di 13(12?) elementi che mi servono per il peso complessivo
         // normalizzato
 
