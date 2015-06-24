@@ -2,18 +2,39 @@
 
 using namespace srs;
 
-Base::Base() {
+Base::Base(float max, float alpha, Today::Field dayField) {
+    _alpha = alpha;
+    _max   = max;
+    _dayField = dayField;
     _today = Today();
 }
 
-Base& Base::set(unsigned int year) {
-    _year = year;
+Base& Base::set(std::pair<long int, long int> year_month) {
+    _year  = year_month.first;
+    _month = year_month.second;
     return *this;
 }
 
 float Base::get() {
-    if(_year >= _today.year())
-       return MAX;
-    ++_year;
-    return get()/2;
+    switch(_dayField) {
+        case Today::Field::YEAR:
+            if(_year >= _today.year()) {
+               return _max;
+            }
+            ++_year;
+            return get()/_alpha;
+
+        case Today::Field::MONTH:
+            if(_year >= _today.year() && _month >= _today.month()) {
+                return _max;
+            }
+
+            if(_month == 12) {
+                ++_year;
+                _month = 1;
+            } else {
+                _month++;
+            }
+            return get()/_alpha;       
+    }
 }

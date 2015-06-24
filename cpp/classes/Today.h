@@ -14,6 +14,10 @@ namespace srs {
             unsigned int month();
             unsigned int day();
             Today();
+            enum Field {
+                MONTH,
+                YEAR
+            };
     };
 }
 

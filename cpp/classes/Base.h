@@ -1,20 +1,21 @@
 #ifndef BASE_H
 #define BASE_H
 
+#include <utility>
 #include "Today.h"
 
 namespace srs {
     class Base {
         public:
-            static constexpr float MAX   = 100;
-
             float get();
-            Base& set(unsigned int);
-            Base();
+            Base& set(std::pair<long int, long int>);
+            Base(float, float, Today::Field);
 
         private:
-            unsigned int _year;
+            long int _year, _month;
+            float _max, _alpha;
             Today _today;
+            Today::Field _dayField;
     };
 }
 

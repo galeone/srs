@@ -18,7 +18,6 @@ void _die() { exit(EXIT_FAILURE); }
 using namespace std;
 using namespace srs;
 
-#ifdef DEBUG
 wstring p_get(PlTerm t)
 {
     wstring s(L"");
@@ -55,11 +54,14 @@ wstring p_get(PlTerm t)
 
     return s;
 }
-#endif
 
 typedef pair<long, wstring> ut_pair;
 typedef map<ut_pair, vector<float>> monthly_map;
 typedef map<ut_pair, long> cardinality_map;
+
+#define FREQ_NUM 5
+#define ALPHA 2.0
+#define BASE_MAX 10000.0
 
 int main(int argc, char **argv) {
     setlocale(LC_ALL, "en_US.utf8");
@@ -93,25 +95,20 @@ int main(int argc, char **argv) {
          start_year = end_year - 1,
          month_counter = 0;
 
-    float base = Base().set(start_year).get();
-
 #ifdef DEBUG
-    wcout << "[-]Search year: " << start_year << " - month: " << start_month << "\n";
-    wstring term_s[arity];
+    wcout << "[-] Starting search from year: " << start_year << " - month: " << start_month << "\n";
 #endif
 
     monthly_map m;
     cardinality_map c;
 
-#define FREQ_NUM 5
+    float base = Base(BASE_MAX, ALPHA, Today::Field::MONTH).set(make_pair(start_year, start_month)).get();
 
     while(month_counter <= 12) {
-
 #ifdef DEBUG
         wcout << "[-] Searching in " << start_year << " - " << start_month << "\n";
         wcout << "[-] Base: " << base << "\n";
 #endif
-
         PlTermv gf_termv(arity);
         PlTermv date_termv(7);
 
@@ -137,7 +134,7 @@ int main(int argc, char **argv) {
 
             auto pair = ut_pair(user, tag);
             if(m.find(pair) == m.end()) {
-                m[pair] = vector<float>(13);
+                m[pair] = vector<float>(13, 0);
             }
 
             if(c.find(pair) == c.end()) {
@@ -169,18 +166,19 @@ int main(int argc, char **argv) {
             float den = c[it.first] * FREQ_NUM,
                   num = m[it.first][month_counter];
             float exp = den == 0 ? 0 : num/den;
-            assert(exp <= 1.0);
-            m[it.first][month_counter] = pow(base, exp);
 #ifdef DEBUG
+            assert(exp <= 1.0);
             wcout << "[-]\tExponent: " << exp << "\n";
+#endif
+            m[it.first][month_counter] = exp == 0 ? 0 : pow(base, exp);
+#ifdef DEBUG
             wcout << "[-]\tWeight: " << m[it.first][month_counter] << "\n";
-
 #endif
         }
 
         // svuoto il conteggio delle occorrenze
         c.clear();
-        // non m in quanto contiene l'array di 13(12?) elementi che mi servono per il peso complessivo
+        // non m in quanto contiene l'array di (12) elementi che mi servono per il peso complessivo
         // normalizzato
 
 #ifdef DEBUG
@@ -193,17 +191,22 @@ int main(int argc, char **argv) {
         if(start_month == 12) {
             start_month = 1;
             ++start_year;
-            base = Base().set(start_year).get();
         } else {
             ++start_month;
         }
-
+        base = Base(BASE_MAX, ALPHA, Today::Field::MONTH).set(make_pair(start_year, start_month)).get();
     }
 
-#ifdef DEBUG
-    wcout << "[+] Yearly cluster total elments: " << counter << endl;
-#endif
+    // (M/alpha) * (1 + 1/alpha + 1/alpha^2 + ... + 1/alpha^11)
+    float normalizationFactor = BASE_MAX/ALPHA, sum = 1;
+    for(int i=1;i<=11;++i) {
+       sum += 1 / pow(ALPHA, i);
+    }
+    normalizationFactor *= sum;
 
+#ifdef DEBUG
+    wcout << "[-] Normalization factor: " << normalizationFactor << "\n";
+#endif
     for(auto const &it : m) {
 #ifdef DEBUG
         wcout << "[-] Computing weight for pair: " << get<0>(it.first) << ", " << get<1>(it.first) << "\n";
@@ -212,14 +215,21 @@ int main(int argc, char **argv) {
         for(auto const &wit : m[it.first]) {
             weight += wit;
         }
+
 #ifdef DEBUG
+        assert(weight > 0);
         wcout << "[-]\tComputed weight: " << weight << "\n";
 #endif
-        float normalizedWeight = weight / (FREQ_NUM * 13 / 2);
+        float normalizedWeight = weight / normalizationFactor;
 #ifdef DEBUG
+        assert(normalizedWeight <= 1.0);
         wcout << "[-]\tNormalized weight: " << normalizedWeight << "\n";
 #endif
     }
+
+#ifdef DEBUG
+    wcout << "[+] Yearly cluster total elments: " << counter << endl;
+#endif
 
     PL_halt(EXIT_SUCCESS);
     return EXIT_SUCCESS;
