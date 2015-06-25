@@ -37,4 +37,6 @@ float Base::get() {
             }
             return get()/_alpha;       
     }
+    std::cerr << "Invalid dayField\n";
+    abort();
 }

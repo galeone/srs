@@ -2,6 +2,8 @@
 #define BASE_H
 
 #include <utility>
+#include <iostream>
+#include <cstdlib>
 #include "Today.h"
 
 namespace srs {

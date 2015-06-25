@@ -56,11 +56,13 @@ wstring p_get(PlTerm t)
 }
 
 typedef pair<long, wstring> ut_pair;
-typedef map<ut_pair, vector<float>> monthly_map;
+typedef pair<vector<float>, long> topic_pair; // vector of 12 frequenices, number of occurence of Topic by User
+typedef map<ut_pair, topic_pair> monthly_map;
 typedef map<ut_pair, long> cardinality_map;
+typedef map<long, long> user_topic_count;
 
 #define FREQ_NUM 5
-#define ALPHA 2.0
+#define ALPHA 4
 #define BASE_MAX 10000.0
 
 int main(int argc, char **argv) {
@@ -68,7 +70,7 @@ int main(int argc, char **argv) {
     PlEngine engine(argc, argv);
 
 #ifdef DEBUG
-    wcout << L"[-] prolog engine initizlized with success!" << endl;
+    wcout << L"[-] Prolog engine initizlized with success!" << endl;
 #endif
 
     const int arity = 8; // of get_frequencies
@@ -101,6 +103,7 @@ int main(int argc, char **argv) {
 
     monthly_map m;
     cardinality_map c;
+    user_topic_count utc;
 
     float base = Base(BASE_MAX, ALPHA, Today::Field::MONTH).set(make_pair(start_year, start_month)).get();
 
@@ -133,22 +136,27 @@ int main(int argc, char **argv) {
             day              = (long)gf_termv[7][3];
 
             auto pair = ut_pair(user, tag);
+
             if(m.find(pair) == m.end()) {
-                m[pair] = vector<float>(13, 0);
+                m[pair] = make_pair(vector<float>(13, 0), 0);
             }
+
+            utc[user]++; // totale delle occorrenze d'uso dei tag
+            // non solo la prima volta, altrimenti esce fuori che durante l'anno
+            // ha usato 2 volte un tag ma in totale ha usato un solo argomento
+            // quindi 2/1 non è una frequenza valida
 
             if(c.find(pair) == c.end()) {
                 c[pair] = 0;
             }
 
-            m.find(pair)->second[month_counter] += tagged_w + rated_positive_w + rated_negative_w + commented_w + searched_w;
+            m.find(pair)->second.first[month_counter] += tagged_w + rated_positive_w + rated_negative_w + commented_w + searched_w;
             c[pair]++;
 
 #ifdef DEBUG
-            wcout << L"[-]\t(" << user << ", " <<tag << ")" << "\n[-]\tDate: " << year << " " << month << " " << day << "\n" 
-                << "[-]\tTagged: " <<tagged_w <<
-                "\n[-]\tRated Positive: " << rated_positive_w << "\n[-]\tRated Negative: " << rated_negative_w <<
-                "\n[-]\tCommented: " << commented_w << "\n[-]\tSearched: " << searched_w << "\n\n";
+            wcout << L"[-]\t(" << user << ", " <<tag << ")" << "\n[-]\tDate: " << year << " " << month << " " << day << "\n" <<
+                "[-]\tTagged: " <<tagged_w << "\n[-]\tRated Positive: " << rated_positive_w << "\n[-]\tRated Negative: " <<
+                rated_negative_w << "\n[-]\tCommented: " << commented_w << "\n[-]\tSearched: " << searched_w << "\n\n";
 #endif
         }
         // Compute the exponent at the end of current month
@@ -159,21 +167,24 @@ int main(int argc, char **argv) {
         for(auto const &it : m) {
 #ifdef DEBUG
             wcout << "[-]Computing monthly weight for pair: " << get<0>(it.first) << ", " << get<1>(it.first) << "\n";
-            wcout << "[-]\tFrequencies sum: " << m[it.first][month_counter] << " (month " << month_counter << ") \n";
+            wcout << "[-]\tFrequencies sum: " << m[it.first].first[month_counter] << " (month " << month_counter << ") \n";
             wcout << "[-]\tNumber of pair occurrence (in month): " << c[it.first] << "\n";
             // nell posizione correte (month_counter) della tal coppia, ci metto dentro il risultato
 #endif
             float den = c[it.first] * FREQ_NUM,
-                  num = m[it.first][month_counter];
+                  num = m[it.first].first[month_counter];
             float exp = den == 0 ? 0 : num/den;
 #ifdef DEBUG
             assert(exp <= 1.0);
             wcout << "[-]\tExponent: " << exp << "\n";
 #endif
-            m[it.first][month_counter] = exp == 0 ? 0 : pow(base, exp);
+            m[it.first].first[month_counter] = exp == 0 ? 0 : pow(base, exp);
 #ifdef DEBUG
-            wcout << "[-]\tWeight: " << m[it.first][month_counter] << "\n";
+            wcout << "[-]\tWeight: " << m[it.first].first[month_counter] << "\n";
 #endif
+            // Per ogni coppia salvo il numero di occorrenze nel mese (sommo a quelle del mese precedente
+            // per avere il numero totale di occorrenze dell'argomento da parte dell'utente nell'anno
+            m[it.first].second += c[it.first];
         }
 
         // svuoto il conteggio delle occorrenze
@@ -196,39 +207,61 @@ int main(int argc, char **argv) {
         }
         base = Base(BASE_MAX, ALPHA, Today::Field::MONTH).set(make_pair(start_year, start_month)).get();
     }
+    // fine iterazione per 12 mesi
 
     // (M/alpha) * (1 + 1/alpha + 1/alpha^2 + ... + 1/alpha^11)
-    float normalizationFactor = BASE_MAX/ALPHA, sum = 1;
+    float normalizationFactor = BASE_MAX, sum = 1;
     for(int i=1;i<=11;++i) {
-       sum += 1 / pow(ALPHA, i);
+        sum += pow(ALPHA, -i);
     }
     normalizationFactor *= sum;
+    normalizationFactor = round(normalizationFactor);
 
 #ifdef DEBUG
     wcout << "[-] Normalization factor: " << normalizationFactor << "\n";
 #endif
+    // Mi serve la coppia (utente, argomento) -> occorrenze annuali di argomento (l'ho)
+    // che diviso il totale degli argomenti per utente (utente, X) -> conteggiato (l'ho in utc[user])
+    // mi da la frequenza del'argomento tra gli argomenti dell'utente
+    //
+    // Creo N (numero di topic) piani.
+    // Ogni piano conterrà la coppia (peso normalizzato, frequenza annuale) -> che identifica un utente
+    map<wstring, map<long, pair<float, float>>> plans;
     for(auto const &it : m) {
+        wstring topic = get<1>(it.first);
+        long    user  = get<0>(it.first);
 #ifdef DEBUG
-        wcout << "[-] Computing weight for pair: " << get<0>(it.first) << ", " << get<1>(it.first) << "\n";
+        wcout << "[-] Computing weight for pair: " << user << ", " << topic << "\n";
 #endif
         float weight = 0;
-        for(auto const &wit : m[it.first]) {
+        for(auto const &wit : m[it.first].first) {
             weight += wit;
         }
 
 #ifdef DEBUG
-        assert(weight > 0);
         wcout << "[-]\tComputed weight: " << weight << "\n";
+        assert(weight > 0);
 #endif
         float normalizedWeight = weight / normalizationFactor;
+        float topicFrequency   = (float)m[it.first].second / utc[get<0>(it.first)];
 #ifdef DEBUG
-        assert(normalizedWeight <= 1.0);
         wcout << "[-]\tNormalized weight: " << normalizedWeight << "\n";
+        wcout << "[-]\tAnnual occurrence of topic: " << m[it.first].second << "\n";
+        wcout << "[-]\tAnnual frequency of topic:  " << topicFrequency << "\n";
+        wcout << m[it.first].second  << " / " << utc[get<0>(it.first)] << "\n";
+        assert(normalizedWeight <= 1.0);
+        assert(topicFrequency <= 1.0);
 #endif
+        if(plans.find(topic) == plans.end()) {
+            plans[topic] = map<long, pair<float, float>>();
+        }
+        // Nel piano T (topic), la coppia (normalizedWeight, topicFrequency) identifica user
+        plans[topic][user] = make_pair(normalizedWeight, topicFrequency);
     }
 
 #ifdef DEBUG
     wcout << "[+] Yearly cluster total elments: " << counter << endl;
+    wcout << "[+] Total of plans generated: " << plans.size() << endl;
 #endif
 
     PL_halt(EXIT_SUCCESS);
