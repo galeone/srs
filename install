@@ -7,14 +7,6 @@
 basedir=$(pwd)
 
 cd /tmp
-
-wget https://www.cs.umd.edu/~mount/Projects/KMeans/kmlocal-1.7.2.tar.gz
-tar xvf kmloca*
-cd kmlocal-1.7.2
-
-#TODO
-
-cd -
 mkdir srs
 cd srs
 # Can't use the latest version. See:
@@ -66,8 +58,7 @@ cd $basedir
 bash populate_db
 
 cd cpp
-swipl-ld -o srs srs.cpp classes/*.cpp ../prolog/srs.pl -O -g -Wall -c++ clang++ -cc-options,-std=c++14
 mkdir -p ../bin
-mv srs ../bin
+swipl-ld -o ../bin/srs *.cpp ../include/*.cpp ../../prolog/srs.pl -O -g -Wall -c++ clang++ -cc-options,-std=c++14 -ld-options=-lpthread
 
 echo "[+] Setup completed"; echo

@@ -2,7 +2,7 @@
 % Do you want to use srs with an other social network? Define a module that exports
 % the same predicate of nerdz and replace the line below
 :- module(engine, [
-    open_db/0, populate/0, close_db/0, base/2, every_hours/3
+    populate_db/0, base/2, every_hours/3, open_db/0, close_db/0
     ]).
 
 :- use_module(nerdz).
@@ -19,15 +19,15 @@ open_db  :- odbc_connect(srs, _, [ alias(srs), open(once) ]).
 every_hours(Start, End, [])   :- Start >= End, !.
 every_hours(Start, End, [[Start, NewTime]|D]) :- NewTime is Start + 3600, every_hours(NewTime, End, D).
 
-populate([], LastEnd) :- odbc_prepare(srs,
+populate_db([], LastEnd) :- odbc_prepare(srs,
                             'UPDATE srs_data SET "timestamp" = ? WHERE "key" = \'LAST_UPDATE\'', [
                             float > timestamp],Statement),
                            odbc_execute(Statement, [ LastEnd ] ),
                            odbc_free_statement(Statement),
                            close_db, !.
 
-populate([[Begin, End]|Tail], _) :- 
-                write('Computing weights ['), write(Begin), write(','), write(End), write(']'), nl,
+populate_db([[Begin, End]|Tail], _) :- 
+                write('Computing freqnecies ['), write(Begin), write(','), write(End), write(']'), nl,
                 % Avoid cartesian product searching only over existing user activities
                 (
                     setof((user(A), tag(T)), (
@@ -39,16 +39,16 @@ populate([[Begin, End]|Tail], _) :-
                    L = []
                 ),
                 topic_value(L, range(Begin, End)), !,
-                populate(Tail, End).
+                populate_db(Tail, End).
 
 % Populate/0 succed only of the right amount of time elapsed
-populate :- open_db, odbc_query(srs,
+populate_db :- open_db, odbc_query(srs,
                 'SELECT "timestamp" FROM srs_data WHERE "key" = \'LAST_UPDATE\'',
                 row(LastUpdate), [ types([integer]) ]),
-                get_time(Now), every_hours(LastUpdate, Now, Hours), populate(Hours, LastUpdate),
+                get_time(Now), every_hours(LastUpdate, Now, Hours), populate_db(Hours, LastUpdate),
                 (
                     (
-                        Hours \= [] , write('Computing weights for every hour between '), write(LastUpdate), write(' and NOW'), nl
+                        Hours \= [] , write('Computing freqnecies for every hour between '), write(LastUpdate), write(' and NOW'), nl
                     ) ;
                     !
                 ).

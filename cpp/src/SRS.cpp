@@ -1,24 +1,9 @@
-#include <iostream>
-#include <string>
-#include <cstdlib>
-#include <cwchar>
-#include <clocale>
-#include <cmath>
-#include <map>
-#include <vector>
-#include <cassert>
-#include <SWI-cpp.h>
-#include "classes/Base.h"
-
-#define DEBUG
-
-void _die() { exit(EXIT_FAILURE); }
-#define die(format, ...) _die()
+#include "SRS.h"
 
 using namespace std;
 using namespace srs;
 
-wstring p_get(PlTerm t)
+wstring SRS::_term(PlTerm t)
 {
     wstring s(L"");
 
@@ -45,7 +30,7 @@ wstring p_get(PlTerm t)
                     if (n > 1) {
                         s += L", ";
                     }
-                    s += p_get(t[n]);
+                    s += _term(t[n]);
                 }
                 s += L")";
                 break;
@@ -55,26 +40,18 @@ wstring p_get(PlTerm t)
     return s;
 }
 
-typedef pair<long, wstring> ut_pair;
-typedef pair<vector<float>, long> topic_pair; // vector of 12 frequenices, number of occurence of Topic by User
-typedef map<ut_pair, topic_pair> monthly_map;
-typedef map<ut_pair, long> cardinality_map;
-typedef map<long, long> user_topic_count;
+SRS::SRS(float alpha, float max) : _alpha(alpha), _max(max) {
+    _plans = plans();
+}
 
-#define FREQ_NUM 5
-#define ALPHA 4
-#define BASE_MAX 10000.0
+void SRS::updateDB() {
+    PlTermv termv(0);
+    PlQuery q("populate",termv);
+    q.next_solution();
+}
 
-int main(int argc, char **argv) {
-    setlocale(LC_ALL, "en_US.utf8");
-    PlEngine engine(argc, argv);
-
-#ifdef DEBUG
-    wcout << L"[-] Prolog engine initizlized with success!" << endl;
-#endif
-
-    const int arity = 8; // of get_frequencies
-
+void SRS::generatePlans() {
+    // Prolog terms
     // t1
     int64_t user;
     //t2
@@ -105,14 +82,14 @@ int main(int argc, char **argv) {
     cardinality_map c;
     user_topic_count utc;
 
-    float base = Base(BASE_MAX, ALPHA, Today::Field::MONTH).set(make_pair(start_year, start_month)).get();
+    float base = Base(_max, _alpha, Today::Field::MONTH).set(make_pair(start_year, start_month)).get();
 
     while(month_counter <= 12) {
 #ifdef DEBUG
         wcout << "[-] Searching in " << start_year << " - " << start_month << "\n";
         wcout << "[-] Base: " << base << "\n";
 #endif
-        PlTermv gf_termv(arity);
+        PlTermv gf_termv(8);
         PlTermv date_termv(7);
 
         date_termv[0] = PlTerm(start_year);
@@ -125,7 +102,7 @@ int main(int argc, char **argv) {
             ++monthly_cluster_elements_counter;
             //http://www.swi-prolog.org/pldoc/man?section=foreign-term-analysis
             user             = (long)gf_termv[0][1];
-            tag              = p_get(gf_termv[1][1]);
+            tag              = _term(gf_termv[1][1]);
             tagged_w         = (double)gf_termv[2][1];
             rated_positive_w = (double)gf_termv[3][1];
             rated_negative_w = (double)gf_termv[4][1];
@@ -146,12 +123,10 @@ int main(int argc, char **argv) {
             // ha usato 2 volte un tag ma in totale ha usato un solo argomento
             // quindi 2/1 non è una frequenza valida
 
-            if(c.find(pair) == c.end()) {
-                c[pair] = 0;
-            }
+            c[pair]++;
 
             m.find(pair)->second.first[month_counter] += tagged_w + rated_positive_w + rated_negative_w + commented_w + searched_w;
-            c[pair]++;
+
 
 #ifdef DEBUG
             wcout << L"[-]\t(" << user << ", " <<tag << ")" << "\n[-]\tDate: " << year << " " << month << " " << day << "\n" <<
@@ -171,7 +146,7 @@ int main(int argc, char **argv) {
             wcout << "[-]\tNumber of pair occurrence (in month): " << c[it.first] << "\n";
             // nell posizione correte (month_counter) della tal coppia, ci metto dentro il risultato
 #endif
-            float den = c[it.first] * FREQ_NUM,
+            float den = c[it.first] * 5, // 5 = number of frequencies
                   num = m[it.first].first[month_counter];
             float exp = den == 0 ? 0 : num/den;
 #ifdef DEBUG
@@ -193,7 +168,7 @@ int main(int argc, char **argv) {
         // normalizzato
 
 #ifdef DEBUG
-        wcout << "[+] Monthly cluster total elements: " << monthly_cluster_elements_counter << endl;
+        wcout << "[-] Monthly cluster total elements: " << monthly_cluster_elements_counter << endl;
 #endif
 
         ++month_counter;
@@ -205,14 +180,14 @@ int main(int argc, char **argv) {
         } else {
             ++start_month;
         }
-        base = Base(BASE_MAX, ALPHA, Today::Field::MONTH).set(make_pair(start_year, start_month)).get();
+        base = Base(_max, _alpha, Today::Field::MONTH).set(make_pair(start_year, start_month)).get();
     }
     // fine iterazione per 12 mesi
 
     // (M/alpha) * (1 + 1/alpha + 1/alpha^2 + ... + 1/alpha^11)
-    float normalizationFactor = BASE_MAX, sum = 1;
+    float normalizationFactor = _max, sum = 1;
     for(int i=1;i<=11;++i) {
-        sum += pow(ALPHA, -i);
+        sum += pow(_alpha, -i);
     }
     normalizationFactor *= sum;
     normalizationFactor = round(normalizationFactor);
@@ -226,7 +201,6 @@ int main(int argc, char **argv) {
     //
     // Creo N (numero di topic) piani.
     // Ogni piano conterrà la coppia (peso normalizzato, frequenza annuale) -> che identifica un utente
-    map<wstring, map<long, pair<float, float>>> plans;
     for(auto const &it : m) {
         wstring topic = get<1>(it.first);
         long    user  = get<0>(it.first);
@@ -248,22 +222,24 @@ int main(int argc, char **argv) {
         wcout << "[-]\tNormalized weight: " << normalizedWeight << "\n";
         wcout << "[-]\tAnnual occurrence of topic: " << m[it.first].second << "\n";
         wcout << "[-]\tAnnual frequency of topic:  " << topicFrequency << "\n";
-        wcout << m[it.first].second  << " / " << utc[get<0>(it.first)] << "\n";
         assert(normalizedWeight <= 1.0);
         assert(topicFrequency <= 1.0);
 #endif
-        if(plans.find(topic) == plans.end()) {
-            plans[topic] = map<long, pair<float, float>>();
-        }
         // Nel piano T (topic), la coppia (normalizedWeight, topicFrequency) identifica user
-        plans[topic][user] = make_pair(normalizedWeight, topicFrequency);
+        _plans[topic][user] = make_pair(normalizedWeight, topicFrequency);
     }
 
 #ifdef DEBUG
-    wcout << "[+] Yearly cluster total elments: " << counter << endl;
-    wcout << "[+] Total of plans generated: " << plans.size() << endl;
+    wcout << "[-] Yearly cluster total elments: " << counter << endl;
+    wcout << "[-] Total of plans generated: " << _plans.size() << endl;
 #endif
+}
 
+SRS::~SRS() {
     PL_halt(EXIT_SUCCESS);
-    return EXIT_SUCCESS;
+}
+
+SRS::users SRS::getRecommendation(long me) {
+    users ret;
+    return ret;
 }

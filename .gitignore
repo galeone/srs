@@ -1,2 +1,2 @@
-bin/*
-cpp/srs
+cpp/lib/*
+cpp/bin/*
