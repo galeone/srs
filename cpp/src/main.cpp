@@ -1,6 +1,6 @@
 #include "SRS.h"
 #include "../include/PracticalSocket.h"
-#include <pthread.h>
+#include <algorithm> // std::find_if_not
 
 using namespace std;
 using namespace srs;
@@ -10,15 +10,21 @@ using namespace srs;
 
 const int RCVBUFSIZE = 32;
 void handleRequest(TCPSocket *sock);     // TCP client handling function
-void *ThreadMain(void *arg);             // Main program of a thread
 
-// RecSys and its mutex
 // RecSys in a singleton
 static SRS& getSRS() {
     static SRS recSys(ALPHA, BASE_MAX);
     return recSys;
 }
-pthread_mutex_t    mutex = PTHREAD_MUTEX_INITIALIZER;
+
+
+// No comment for the lack of string::trim
+// Thanks to: https://stackoverflow.com/questions/216823/whats-the-best-way-to-trim-stdstring/17976541#17976541
+inline std::string trim(const std::string &s)
+{
+    auto wsfront = std::find_if_not(s.begin(),s.end(),[](int c){return std::isspace(c);});
+    return std::string(wsfront,std::find_if_not(s.rbegin(),std::string::const_reverse_iterator(wsfront),[](int c){return std::isspace(c);}).base());
+}
 
 int main(int argc, char **argv) {
     if (argc != 2) {
@@ -29,27 +35,15 @@ int main(int argc, char **argv) {
     unsigned short port = atoi(argv[1]);
     TCPServerSocket servSock(port);  // Socket descriptor for server
 
-    setlocale(LC_ALL, "en_US.utf8"); // Set locale (for wcstring)
-
     try {
+        setlocale(LC_ALL, "en_US.utf8"); // Set locale (for wcstring)
         PlEngine engine(argc, argv); // Init Prolog engine
+        for (;;) {
+            handleRequest(servSock.accept());
+        }
     } catch(PlError &e) {
         cerr << e.message;
         return EXIT_FAILURE;
-    }
-
-    try {
-        for (;;) {
-            // Create separate memory for client argument  
-            TCPSocket *clntSock = servSock.accept();
-
-            // Create client thread  
-            pthread_t threadID;
-            if(pthread_create(&threadID, NULL, ThreadMain, (void *) clntSock) != 0) {
-                cerr << "Unable to create thread" << endl;
-                return EXIT_FAILURE;
-            }
-        }
     } catch (SocketException &e) {
         cerr << e.what() << endl;
         return EXIT_FAILURE;
@@ -62,48 +56,43 @@ int main(int argc, char **argv) {
 void handleRequest(TCPSocket *sock) {
     char buffer[RCVBUFSIZE];
     memset(buffer, '\0', RCVBUFSIZE);
-    int recvMsgSize;
 
-    while((recvMsgSize = sock->recv(buffer, RCVBUFSIZE)) > 0) {
+    while(sock->recv(buffer, RCVBUFSIZE) > 0) {
         cout << "[!] Received command: " << buffer << "\n";
-        if(!strcmp(buffer, "UPDATE")) {
-            cout << "test\n";
-            pthread_mutex_lock(&mutex);
+        string command(buffer);
+        command = trim(command);
+        if(command == "UPDATE") {
+            sock->send("WAIT\n",5);
             getSRS().updateDB();
             cout << "[+] Database updated..\n";
             getSRS().generatePlans();
             cout << "[+] Generated plans..\n";
-            pthread_mutex_unlock(&mutex);
-            sock->send("OK", 2);
-        } else if(!strcmp(buffer, "RECOMMENDATION")) {
+            sock->send("OK\n", 3);
+        } else if(command == "RECOMMENDATION") {
             long user = 0;
+            memset(buffer, '\0', RCVBUFSIZE);
             if(sock->recv(buffer, RCVBUFSIZE) > 0 && (user = atol(buffer))) {
-                pthread_mutex_lock(&mutex);
                 SRS::users users = getSRS().getRecommendation(user);
-                pthread_mutex_unlock(&mutex);
+                char userIDString[20];
                 for(auto const rec : users) {
-                    sock->send((const void *)rec, sizeof rec);
+                    memset(userIDString, '\0', 20);
+                    sprintf(userIDString, "%lu", rec);
+                    sock->send(userIDString, strlen(userIDString));
                     sock->send("\n",1);
                 }
-                sock->send("OK", 2);
+                sock->send("OK\n", 3);
+            } else {
+                sock->send("ERROR\n",6);
             }
         }
-        else {
-            sock->send("ERROR",5);
-            return;
+        else if(command == "BYE") {
+            sock->send("BYE\n",4);
+            break;
         }
-
+        else {
+            sock->send("ERROR\n",6);
+        }
+        memset(buffer, '\0', RCVBUFSIZE);
     }
-    // Destructor closes socket
-}
-
-void *ThreadMain(void *clntSock) {
-    // Guarantees that thread resources are deallocated upon return  
-    pthread_detach(pthread_self()); 
-
-    // Extract socket file descriptor from argument  
-    handleRequest((TCPSocket *) clntSock);
-
-    delete (TCPSocket *) clntSock;
-    return NULL;
+    delete sock;
 }

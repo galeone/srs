@@ -10,6 +10,7 @@
 #include <map>
 #include <vector>
 #include <cassert>
+#include <algorithm>
 #include <SWI-cpp.h>
 #include "Base.h"
 
@@ -39,6 +40,7 @@ namespace srs {
             float _max;
             plans _plans;
             std::wstring _term(PlTerm);
+            float _euclideanDistance(float, float, float, float);
     };
 }
 

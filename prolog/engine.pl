@@ -19,14 +19,14 @@ open_db  :- odbc_connect(srs, _, [ alias(srs), open(once) ]).
 every_hours(Start, End, [])   :- Start >= End, !.
 every_hours(Start, End, [[Start, NewTime]|D]) :- NewTime is Start + 3600, every_hours(NewTime, End, D).
 
-populate_db([], LastEnd) :- odbc_prepare(srs,
+populate_db([], StartedEngine) :- odbc_prepare(srs,
                             'UPDATE srs_data SET "timestamp" = ? WHERE "key" = \'LAST_UPDATE\'', [
-                            float > timestamp],Statement),
-                           odbc_execute(Statement, [ LastEnd ] ),
-                           odbc_free_statement(Statement),
-                           close_db, !.
+                            float > timestamp ],Statement),
+                            odbc_execute(Statement, [ StartedEngine ] ),
+                            odbc_free_statement(Statement),
+                            close_db, !.
 
-populate_db([[Begin, End]|Tail], _) :- 
+populate_db([[Begin, End]|Tail], StartedEngine) :- 
                 write('Computing freqnecies ['), write(Begin), write(','), write(End), write(']'), nl,
                 % Avoid cartesian product searching only over existing user activities
                 (
@@ -39,13 +39,13 @@ populate_db([[Begin, End]|Tail], _) :-
                    L = []
                 ),
                 topic_value(L, range(Begin, End)), !,
-                populate_db(Tail, End).
+                populate_db(Tail, StartedEngine).
 
 % Populate/0 succed only of the right amount of time elapsed
 populate_db :- open_db, odbc_query(srs,
                 'SELECT "timestamp" FROM srs_data WHERE "key" = \'LAST_UPDATE\'',
                 row(LastUpdate), [ types([integer]) ]),
-                get_time(Now), every_hours(LastUpdate, Now, Hours), populate_db(Hours, LastUpdate),
+                get_time(Now), every_hours(LastUpdate, Now, Hours), populate_db(Hours, Now),
                 (
                     (
                         Hours \= [] , write('Computing freqnecies for every hour between '), write(LastUpdate), write(' and NOW'), nl

@@ -47,7 +47,7 @@ SRS::SRS(float alpha, float max) : _alpha(alpha), _max(max) {
 void SRS::updateDB() {
     PlTermv termv(0);
     PlQuery q("populate",termv);
-    q.next_solution();
+    while(q.next_solution());
 }
 
 void SRS::generatePlans() {
@@ -229,9 +229,20 @@ void SRS::generatePlans() {
         _plans[topic][user] = make_pair(normalizedWeight, topicFrequency);
     }
 
+    // Elimino i piani inutili, cioè quell in cui è presente un solo utente
 #ifdef DEBUG
     wcout << "[-] Yearly cluster total elments: " << counter << endl;
     wcout << "[-] Total of plans generated: " << _plans.size() << endl;
+#endif
+    for(auto const &plIt : _plans) {
+        //plIt.first == topic
+        //plIt.second == map<user, <weight1, weight2>>
+        if(_plans[plIt.first].size() == 1) {
+            _plans.erase(plIt.first);
+        }
+    }
+#ifdef DEBUG
+    wcout << "[-] Total of valid plans generated: " << _plans.size() << endl;
 #endif
 }
 
@@ -239,7 +250,112 @@ SRS::~SRS() {
     PL_halt(EXIT_SUCCESS);
 }
 
+inline float SRS::_euclideanDistance(float x1, float y1, float x2, float y2)
+{
+    return sqrt(pow(x1 - x2, 2) + pow(y1 - y2, 2));
+}
+
 SRS::users SRS::getRecommendation(long me) {
     users ret;
+    vector<pair<long, float>> nearest_users;
+
+    // Per ogni piano in cui è presente l'utente, calcola
+    // la distanza di ogni altro utente
+    // salva il minore tra quelli presenti
+    for(auto const &plIt : _plans) {
+        auto plan = _plans[plIt.first];
+        auto meInPlanIt = plan.find(me);
+
+        if(meInPlanIt != plan.end()) { // se mi trovo in questo piano (ho parlato di questo T)
+            // allora per ogni punto in questo piano, calcolo la distanza da me
+            // evitando di calcolarla per me stesso
+            // e ne salvo la coppia <utente, valore_minore>
+#ifdef DEBUG
+            cout << "[+] Found user in plan " << meInPlanIt->first << "\n";
+#endif
+            float me_x1 = get<0>(meInPlanIt->second),
+                  me_y1 = get<1>(meInPlanIt->second);
+
+            float min_distance = 2; // distance is always <= 1
+            long nearest_user = 0;
+            for(auto userIt : plan) {
+                if(userIt.first != me) {
+                    float other_x2 = get<0>(userIt.second), other_y2 = get<1>(userIt.second);
+                    float distance = _euclideanDistance(me_x1, me_y1, other_x2, other_y2);
+                    if(distance < min_distance) {
+                        min_distance = distance;
+                        nearest_user = userIt.first;
+                    }
+#ifdef DEBUG
+                    cout << "[+]\tCalculated distance with " << userIt.first << ": " << distance << "\n";
+#endif
+                }
+
+#ifdef DEBUG
+                cout << "[!] Nearest user in plan: " << nearest_user << " with distance: " << min_distance << "\n";
+#endif
+                if(min_distance != 2) {
+                    nearest_users.push_back(make_pair(nearest_user, min_distance));
+                    min_distance = 2;
+                    nearest_user = 0;
+                }
+            }
+        }
+    }
+
+    // Ordino in base all'utente (in modo da poter sfruttare questo ordinamento dopo)
+    sort(nearest_users.begin(), nearest_users.end(), [](const pair<long, float>& one, const pair<long, float>& two) -> bool {
+            return one.first < two.first;
+    });
+#ifdef DEBUG
+    cout << "[+] Sorted vector (by user): \n\n";
+    for(auto user_distance : nearest_users) {
+        cout << "\tUser: " << user_distance.first << ", Distance: " << user_distance.second << "\n";
+    }
+#endif
+    // Nel vettore abbiamo le coppie <utente, distanza> con utente ripetuto
+    // L'ordinamento delle raccomandazioni va fatto in base al numero di occorrenze trovate
+    // (parliamo di molti topic simili) e alla minima distanza trovata
+    // Quindi va calcolata la distanza media, che tiene conto sia del numero di occorrenze e sia delle distanze
+
+    auto size = nearest_users.size();
+    if(size > 0) {
+        vector<pair<long, float>> user_avg;
+        long actualUser = get<0>(nearest_users[0]);
+        float actualSum = get<1>(nearest_users[0]);
+        unsigned int actualOccurences = 1;
+        for(auto i=1;i<size;++i) {
+            if(get<0>(nearest_users[i]) != actualUser) {
+                user_avg.push_back(make_pair(actualUser, actualSum / actualOccurences));
+                actualOccurences = 1;
+                actualSum = get<1>(nearest_users[i]);
+                actualUser = get<0>(nearest_users[i]);
+            } else {
+                actualSum += get<1>(nearest_users[i]);
+                ++actualOccurences;
+            }
+        }
+        user_avg.push_back(make_pair(actualUser, actualSum / actualOccurences));
+#ifdef DEBUG
+        cout << "[+] Avarages vecor ( " << user_avg.size() << "): \n";
+        for(auto const &it : user_avg) {
+            cout << "\tUser: " << it.first << ", Average: " << it.second << "\n";
+        }
+#endif
+        // Ordino in base a avg crescente e metto in ret
+        sort(user_avg.begin(), user_avg.end(), [](const pair<long, float>& one, const pair<long, float>& two) -> bool {
+                return one.second < two.second;
+        });
+#ifdef DEBUG
+        cout << "[+] Sorted vector (by average distance in every plan): \n\n";
+        for(auto user_distance_avg : user_avg) {
+            cout << "\tUser: " << user_distance_avg.first << ", Distance: " << user_distance_avg.second << "\n";
+        }
+#endif
+        for(auto user_distance_avg : user_avg) {
+            ret.push_back(user_distance_avg.first);
+        }
+    }
+
     return ret;
 }
