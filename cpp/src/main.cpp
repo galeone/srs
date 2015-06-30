@@ -52,6 +52,9 @@ int main(int argc, char **argv) {
     return EXIT_SUCCESS;
 }
 
+#define ERROR() sock->send("ERROR\n",6)
+#define OK() sock->send("OK\n",3)
+
 // TCP client handling function
 void handleRequest(TCPSocket *sock) {
     char buffer[RCVBUFSIZE];
@@ -67,11 +70,13 @@ void handleRequest(TCPSocket *sock) {
             cout << "[+] Database updated..\n";
             getSRS().generatePlans();
             cout << "[+] Generated plans..\n";
-            sock->send("OK\n", 3);
+            OK();
         } else if(command == "RECOMMENDATION") {
+            sock->send("FOR\n", 4);
             long user = 0;
             memset(buffer, '\0', RCVBUFSIZE);
             if(sock->recv(buffer, RCVBUFSIZE) > 0 && (user = atol(buffer))) {
+                sock->send("WAIT\n", 5);
                 SRS::users users = getSRS().getRecommendation(user);
                 char userIDString[20];
                 for(auto const rec : users) {
@@ -80,9 +85,27 @@ void handleRequest(TCPSocket *sock) {
                     sock->send(userIDString, strlen(userIDString));
                     sock->send("\n",1);
                 }
-                sock->send("OK\n", 3);
+                OK();
             } else {
-                sock->send("ERROR\n",6);
+                ERROR();
+            }
+        }
+        else if(command == "ACCEPTED RECOMMENDATION") {
+            sock->send("FROM\n", 5);
+            long from = 0, user = 0;
+            memset(buffer, '\0', RCVBUFSIZE);
+            if(sock->recv(buffer, RCVBUFSIZE) > 0 && (from = atol(buffer))) {
+                sock->send("ACCEPTED USER\n", 14);
+                memset(buffer, '\0', RCVBUFSIZE);
+                if(sock->recv(buffer, RCVBUFSIZE) > 0 && (user = atol(buffer))) {
+                    // TODO: gestire il fatto che from ha accettanto la raccomandazione di user
+                    // come varia i parametri? quali parametri? nuova metrica?
+                    OK();
+                } else {
+                    ERROR();
+                }
+            } else {
+                ERROR();
             }
         }
         else if(command == "BYE") {

@@ -255,7 +255,7 @@ inline float SRS::_euclideanDistance(float x1, float y1, float x2, float y2)
     return sqrt(pow(x1 - x2, 2) + pow(y1 - y2, 2));
 }
 
-SRS::users SRS::getRecommendation(long me) {
+SRS::users SRS::_getUsersSortedByAffinity(long me) {
     users ret;
     vector<pair<long, float>> nearest_users;
 
@@ -358,4 +358,9 @@ SRS::users SRS::getRecommendation(long me) {
     }
 
     return ret;
+}
+
+SRS::users SRS::getRecommendation(long me) {
+    // TODO: filter friends or just followed
+    return _getUsersSortedByAffinity(me);
 }

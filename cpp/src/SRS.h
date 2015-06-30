@@ -21,9 +21,9 @@ namespace srs {
             typedef std::vector<long> users;
 
             SRS(float, float);
-            users getRecommendation(long);
             void updateDB();
             void generatePlans();
+            users getRecommendation(long);
             ~SRS();
 
         private:
@@ -41,6 +41,7 @@ namespace srs {
             plans _plans;
             std::wstring _term(PlTerm);
             float _euclideanDistance(float, float, float, float);
+            users _getUsersSortedByAffinity(long);
     };
 }
 
