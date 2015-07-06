@@ -113,7 +113,7 @@ void handleRequest(TCPSocket *sock) {
             break;
         }
         else {
-            sock->send("ERROR\n",6);
+            ERROR();
         }
         memset(buffer, '\0', RCVBUFSIZE);
     }
