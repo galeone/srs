@@ -1,0 +1,5 @@
+set xrange [-10:0]
+set xtics add(-10,-9,-8,-7,-6,-5,-4,-3,-2,-1,0)
+b(x) = (x >= -1) ? 100 : b(x + 1)/2;
+plot b(x), 100*exp(x)
+pause -1
