@@ -8,8 +8,7 @@
 :- use_module(nerdz).
 :- consult(config).
 
-% populating the srs database, computing the cost for each item
-
+% populating the srs database, computing the cost for every item
 open_db  :- odbc_connect(srs, _, [ alias(srs), open(once) ]).
 
 % Compute the relation value between topics and users.
@@ -27,7 +26,7 @@ populate_db([], StartedEngine) :- odbc_prepare(srs,
                             close_db, !.
 
 populate_db([[Begin, End]|Tail], StartedEngine) :- 
-                write('Computing freqnecies ['), write(Begin), write(','), write(End), write(']'), nl,
+                write('Computing frequencies ['), write(Begin), write(','), write(End), write(']'), nl,
                 % Avoid cartesian product searching only over existing user activities
                 (
                     setof((user(A), tag(T)), (
@@ -48,7 +47,7 @@ populate_db :- open_db, odbc_query(srs,
                 get_time(Now), every_hours(LastUpdate, Now, Hours), populate_db(Hours, Now),
                 (
                     (
-                        Hours \= [] , write('Computing freqnecies for every hour between '), write(LastUpdate), write(' and NOW'), nl
+                        Hours \= [] , write('Computed frequencies for every hour between '), write(LastUpdate), write(' and Now'), nl
                     ) ;
                     !
                 ).

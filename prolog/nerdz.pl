@@ -37,14 +37,14 @@ tags(tag(T)) :- open_db, odbc_query(nerdz,
 
 % user(A) followed user(B) the Timestamp
 follow(user(A), user(B), Timestamp) :- open_db, odbc_query(nerdz,
-                        'SELECT "from", "to", "time" FROM followers',
+                        'SELECT "from", "to", "time" FROM followers ORDER BY "time" ASC',
                         row(A, B, Timestamp), [
                             types([integer, integer, integer])
                         ]).
 
 % user(A) followed project(B) the Timestamp
 follow(user(A), project(B), Timestamp) :- open_db, odbc_query(nerdz,
-                        'SELECT "from", "to", "time" FROM groups_followers',
+                        'SELECT "from", "to", "time" FROM groups_followers ORDER BY "time" ASC',
                         row(A, B, Timestamp), [
                             types([integer, integer, integer])
                         ]).

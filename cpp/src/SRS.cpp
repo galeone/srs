@@ -50,6 +50,20 @@ void SRS::updateDB() {
     while(q.next_solution());
 }
 
+SRS::users SRS::getFollowing(long me) {
+        PlTermv gf_termv(3);
+        PlTermv user_id(1);
+        user_id[0] = me;
+        gf_termv[0] = PlCompound("user",user_id);
+        PlQuery q("get_follow",gf_termv);
+
+        users ret;
+        while(q.next_solution()) {
+            ret.push_back((long)gf_termv[1][1]);
+        }
+        return ret;
+}
+
 void SRS::generatePlans() {
     // Prolog terms
     // t1
@@ -255,50 +269,49 @@ inline float SRS::_euclideanDistance(float x1, float y1, float x2, float y2)
     return sqrt(pow(x1 - x2, 2) + pow(y1 - y2, 2));
 }
 
+
 SRS::users SRS::_getUsersSortedByAffinity(long me) {
+    return _getUsersSortedByAffinity(me, _plans);
+}
+
+SRS::users SRS::_getUsersSortedByAffinity(long me, plans& p) {
     users ret;
     vector<pair<long, float>> nearest_users;
 
     // Per ogni piano in cui è presente l'utente, calcola
     // la distanza di ogni altro utente
     // salva il minore tra quelli presenti
-    for(auto const &plIt : _plans) {
-        auto plan = _plans[plIt.first];
-        auto meInPlanIt = plan.find(me);
+    for(auto const& plan : getPlans(me, p)) {
+        // allora per ogni punto in questo piano, calcolo la distanza da me
+        // evitando di calcolarla per me stesso
+        // e ne salvo la coppia <utente, valore_minore>
+        // io sono sicuramente presente nel piano
+        auto meInPlanIt = plan.second.find(me);
+        float me_x1 = get<0>(meInPlanIt->second),
+              me_y1 = get<1>(meInPlanIt->second);
 
-        if(meInPlanIt != plan.end()) { // se mi trovo in questo piano (ho parlato di questo T)
-            // allora per ogni punto in questo piano, calcolo la distanza da me
-            // evitando di calcolarla per me stesso
-            // e ne salvo la coppia <utente, valore_minore>
-#ifdef DEBUG
-            cout << "[+] Found user in plan " << meInPlanIt->first << "\n";
-#endif
-            float me_x1 = get<0>(meInPlanIt->second),
-                  me_y1 = get<1>(meInPlanIt->second);
-
-            float min_distance = 2; // distance is always <= 1
-            long nearest_user = 0;
-            for(auto userIt : plan) {
-                if(userIt.first != me) {
-                    float other_x2 = get<0>(userIt.second), other_y2 = get<1>(userIt.second);
-                    float distance = _euclideanDistance(me_x1, me_y1, other_x2, other_y2);
-                    if(distance < min_distance) {
-                        min_distance = distance;
-                        nearest_user = userIt.first;
-                    }
-#ifdef DEBUG
-                    cout << "[+]\tCalculated distance with " << userIt.first << ": " << distance << "\n";
-#endif
+        float min_distance = 2; // distance is always <= 1
+        long nearest_user = 0;
+        for(auto userIt : plan.second) {
+            if(userIt.first != me) {
+                float other_x2 = get<0>(userIt.second), other_y2 = get<1>(userIt.second);
+                float distance = _euclideanDistance(me_x1, me_y1, other_x2, other_y2);
+                if(distance < min_distance) {
+                    min_distance = distance;
+                    nearest_user = userIt.first;
                 }
+#ifdef DEBUG
+                cout << "[+]\tCalculated distance with " << userIt.first << ": " << distance << "\n";
+#endif
+            }
 
 #ifdef DEBUG
-                cout << "[!] Nearest user in plan: " << nearest_user << " with distance: " << min_distance << "\n";
+            cout << "[!] Nearest user in plan: " << nearest_user << " with distance: " << min_distance << "\n";
 #endif
-                if(min_distance != 2) {
-                    nearest_users.push_back(make_pair(nearest_user, min_distance));
-                    min_distance = 2;
-                    nearest_user = 0;
-                }
+            if(min_distance != 2) {
+                nearest_users.push_back(make_pair(nearest_user, min_distance));
+                min_distance = 2;
+                nearest_user = 0;
             }
         }
     }
@@ -306,7 +319,7 @@ SRS::users SRS::_getUsersSortedByAffinity(long me) {
     // Ordino in base all'utente (in modo da poter sfruttare questo ordinamento dopo)
     sort(nearest_users.begin(), nearest_users.end(), [](const pair<long, float>& one, const pair<long, float>& two) -> bool {
             return one.first < two.first;
-    });
+            });
 #ifdef DEBUG
     cout << "[+] Sorted vector (by user): \n\n";
     for(auto user_distance : nearest_users) {
@@ -345,7 +358,7 @@ SRS::users SRS::_getUsersSortedByAffinity(long me) {
         // Ordino in base a avg crescente e metto in ret
         sort(user_avg.begin(), user_avg.end(), [](const pair<long, float>& one, const pair<long, float>& two) -> bool {
                 return one.second < two.second;
-        });
+                });
 #ifdef DEBUG
         cout << "[+] Sorted vector (by average distance in every plan): \n\n";
         for(auto user_distance_avg : user_avg) {
@@ -363,4 +376,29 @@ SRS::users SRS::_getUsersSortedByAffinity(long me) {
 SRS::users SRS::getRecommendation(long me) {
     // TODO: filter friends or just followed
     return _getUsersSortedByAffinity(me);
+}
+
+SRS::users SRS::getRecommendation(long me, plans& p) {
+    // TODO: filter friends or just followed
+    return _getUsersSortedByAffinity(me, p);
+}
+
+// Return plans containing the user
+SRS::plans SRS::getPlans(long me, plans& p) {
+    plans ret;
+    for(auto const &plIt : p) {
+        auto plan = p[plIt.first];
+        auto meInPlanIt = plan.find(me);
+        if(meInPlanIt != plan.end()) {
+            ret[plIt.first] = plIt.second;
+#ifdef DEBUG
+            cout << "[+] Found user in plan " << meInPlanIt->first << "\n";
+#endif
+        }
+    }
+    return ret;
+}
+
+SRS::plans SRS::getPlans(long me) {
+    return SRS::getPlans(me, _plans);
 }

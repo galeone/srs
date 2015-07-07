@@ -19,11 +19,17 @@ namespace srs {
     class SRS {
         public:
             typedef std::vector<long> users;
+            typedef std::map<std::wstring, std::map<long, std::pair<float, float>>> plans;
 
             SRS(float, float);
             void updateDB();
             void generatePlans();
+            const plans& getPlans() const { return _plans; }
+            plans getPlans(long, plans&);
+            plans getPlans(long);
             users getRecommendation(long);
+            users getRecommendation(long, plans&);
+            users getFollowing(long);
             ~SRS();
 
         private:
@@ -34,7 +40,7 @@ namespace srs {
             typedef std::map<ut_pair, topic_pair> monthly_map;
             typedef std::map<ut_pair, long> cardinality_map;
             typedef std::map<long, long> user_topic_count;
-            typedef std::map<std::wstring, std::map<long, std::pair<float, float>>> plans;
+
 
             float _alpha;
             float _max;
@@ -42,6 +48,7 @@ namespace srs {
             std::wstring _term(PlTerm);
             float _euclideanDistance(float, float, float, float);
             users _getUsersSortedByAffinity(long);
+            users _getUsersSortedByAffinity(long, plans&);
     };
 }
 
