@@ -270,13 +270,13 @@ inline float SRS::_euclideanDistance(float x1, float y1, float x2, float y2)
 }
 
 
-SRS::users SRS::_getUsersSortedByAffinity(long me) {
+SRS::users_rank SRS::_getUsersSortedByAffinity(long me) {
     return _getUsersSortedByAffinity(me, _plans);
 }
 
-SRS::users SRS::_getUsersSortedByAffinity(long me, plans& p) {
-    users ret;
-    vector<pair<long, float>> nearest_users;
+SRS::users_rank SRS::_getUsersSortedByAffinity(long me, plans& p) {
+    users_rank ret;
+    users_rank nearest_users;
 
     // Per ogni piano in cui è presente l'utente, calcola
     // la distanza di ogni altro utente
@@ -366,19 +366,19 @@ SRS::users SRS::_getUsersSortedByAffinity(long me, plans& p) {
         }
 #endif
         for(auto user_distance_avg : user_avg) {
-            ret.push_back(user_distance_avg.first);
+            ret.push_back(user_distance_avg);
         }
     }
 
     return ret;
 }
 
-SRS::users SRS::getRecommendation(long me) {
+SRS::users_rank SRS::getRecommendation(long me) {
     // TODO: filter friends or just followed
     return _getUsersSortedByAffinity(me);
 }
 
-SRS::users SRS::getRecommendation(long me, plans& p) {
+SRS::users_rank SRS::getRecommendation(long me, plans& p) {
     // TODO: filter friends or just followed
     return _getUsersSortedByAffinity(me, p);
 }

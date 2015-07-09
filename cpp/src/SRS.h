@@ -19,6 +19,7 @@ namespace srs {
     class SRS {
         public:
             typedef std::vector<long> users;
+            typedef std::vector<std::pair<long, float>> users_rank;
             typedef std::map<std::wstring, std::map<long, std::pair<float, float>>> plans;
 
             SRS(float, float);
@@ -27,8 +28,8 @@ namespace srs {
             const plans& getPlans() const { return _plans; }
             plans getPlans(long, plans&);
             plans getPlans(long);
-            users getRecommendation(long);
-            users getRecommendation(long, plans&);
+            users_rank getRecommendation(long);
+            users_rank getRecommendation(long, plans&);
             users getFollowing(long);
             ~SRS();
 
@@ -47,8 +48,8 @@ namespace srs {
             plans _plans;
             std::wstring _term(PlTerm);
             float _euclideanDistance(float, float, float, float);
-            users _getUsersSortedByAffinity(long);
-            users _getUsersSortedByAffinity(long, plans&);
+            users_rank _getUsersSortedByAffinity(long);
+            users_rank _getUsersSortedByAffinity(long, plans&);
     };
 }
 
