@@ -29,12 +29,17 @@ inline std::string trim(const std::string &s)
 }
 
 int main(int argc, char **argv) {
+    unsigned short port = 0;
     if (argc != 2) {
-        cerr << "Usage: " << argv[0] << " <Server Port> " << endl;
-        return EXIT_FAILURE;
+        cout << "[+] Using default port: 9876" << endl;
+        port = 9876;
+    } else {
+        port = atoi(argv[1]);
+        if(!port) {
+            cerr << "Usage: " << argv[0] << " <Server Port> " << endl;
+            return EXIT_FAILURE;
+        }
     }
-
-    unsigned short port = atoi(argv[1]);
     TCPServerSocket servSock(port);  // Socket descriptor for server
 
     try {
@@ -57,6 +62,35 @@ int main(int argc, char **argv) {
 #define ERROR() sock->send("ERROR\n",6)
 #define OK() sock->send("OK\n",3)
 #define WAIT() sock->send("WAIT\n",5)
+
+inline void printStat(int actual_user, int true_positive, int true_negative, int false_positive, int false_negative) {
+    cout << "[+] \tTesting for user " << actual_user << "\n";
+    cout << "[+] Building confusion matrix...\n";
+    cout << "Actual class: Followed\tNot followed\n";
+    cout << "Predicted class\tFollowed\t" << true_positive << "\t" << false_positive << "\n\t\tNot followed\t" << false_negative << "\t" << true_negative <<"\n";
+
+    if(true_positive + false_negative > 0) {
+        cout << "Sensivity: " << (float)true_positive/(true_positive + false_negative) << "\n";
+        cout << "False negative rate: " << false_negative/(false_negative + true_positive) << "\n";
+    }
+    if(false_positive + true_negative > 0) {
+        float spc = (float)true_negative/(false_positive + true_negative);
+        cout << "Specificiy: " << spc << "\n";
+        cout << "Fall out: " << (1 - spc) << "\n";
+    }
+    if(true_positive + false_positive > 0) {
+        float ppv = (float)true_positive/(true_positive + false_positive);
+        cout << "Precision: " << ppv << "\n";
+        cout << "False discovery rate: " << (1 - ppv) << "\n";
+    }
+    if(true_negative + false_negative > 0) {
+        cout << "Negative predictive value: " << (float)true_negative/(true_negative + false_negative)  << "\n";
+    }
+
+    if(true_positive + false_positive + false_negative > 0) {
+        cout << "F1 score: " << (2*(float)true_positive/(2*true_positive + false_positive + false_negative)) << "\n";
+    }
+}
 
 // TCP client handling function
 void handleRequest(TCPSocket *sock) {
@@ -99,24 +133,58 @@ void handleRequest(TCPSocket *sock) {
             getSRS().updateDB();
             cout << "[+] Generating plans...\n";
             getSRS().generatePlans();
-            long user = 1;
-            SRS::users following = getSRS().getFollowing(user); // ordered by follow time
-            SRS::users_rank recommendation = getSRS().getRecommendation(user);
+            SRS::users all_users = getSRS().getUsers();
+            auto au_s = all_users.size();
+            vector<int> true_positive(au_s,0); // followed and recommended to follow
+            vector<int> false_positive(au_s, 0); // not followed but recommendted to follow
+            vector<int> false_negative(au_s, 0); // followed but not recommended to follow
+            vector<int> true_negative(au_s, 0);// not followed and not recommended to be followed
 
-            auto recButNo = 0;
-            for(int i=0;i<recommendation.size(); i++) {
-                if(find(following.begin(), following.end(), get<0>(recommendation[i]))  == following.end()) {
-                    recButNo++;
+            for(int i=0; i<au_s;++i) {
+                auto actual_user = all_users[i];
+
+                SRS::users following = getSRS().getFollowing(actual_user); // ordered by follow time
+                SRS::users_rank affinity = getSRS().getUsersSortedByAffinity(actual_user);
+
+                auto it = find_if(affinity.begin(), affinity.end(), [&](pair<long, float> p) {
+                        return p.first == actual_user;
+                        });
+                bool recommended_to_follow = it != affinity.end();
+
+                if(find(following.begin(), following.end(), actual_user) != following.end()) {
+                    // followed
+                    if(!recommended_to_follow) {
+                        // and not recommended
+                        ++false_negative[i];
+                    } else {
+                        // and recommended
+                        ++true_positive[i];
+                    }
+                } else {
+                    // not followed
+                    if(!recommended_to_follow) {
+                        // and not recommented
+                        ++true_negative[i];
+                    } else {
+                        // and recommented
+                        ++false_positive[i];
+                    }
                 }
+                printStat(actual_user, true_positive[i], true_negative[i], false_positive[i], false_negative[i]);
             }
-            cout << "Compiting differences between recommendation and following\n";
-            cout << "Reccomendation size: " << recommendation.size() << "\n";
-            cout << "Following size: " << following.size() << "\n";
-            cout << "Recommended but not followed: " << recButNo << "\n";
-            cout << "Recommended and followed: " << recommendation.size() - recButNo << "\n";
-            // Find true positive (correct match) (found), false positive and find precision
-            // Find true positive and false negative to find recall (accuracy)
 
+            cout << "\n\n";
+            int tp = 0, tn=0, fp=0, fn=0;
+            for(int i=0;i<au_s;i++) {
+                tp += true_positive[i];
+                tn += true_negative[i];
+                fp += false_positive[i];
+                fn += false_negative[i];
+            }
+
+            printStat(-1, tp, tn, fp, fn);
+
+            OK();
         } else if(command == "RECOMMENDATION") {
             sock->send("FOR\n", 4);
             long user = 0;

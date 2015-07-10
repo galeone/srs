@@ -51,17 +51,27 @@ void SRS::updateDB() {
 }
 
 SRS::users SRS::getFollowing(long me) {
-        PlTermv gf_termv(3);
-        PlTermv user_id(1);
-        user_id[0] = me;
-        gf_termv[0] = PlCompound("user",user_id);
-        PlQuery q("get_follow",gf_termv);
+    PlTermv gf_termv(3);
+    PlTermv user_id(1);
+    user_id[0] = me;
+    gf_termv[0] = PlCompound("user",user_id);
+    PlQuery q("get_follow",gf_termv);
 
-        users ret;
-        while(q.next_solution()) {
-            ret.push_back((long)gf_termv[1][1]);
-        }
-        return ret;
+    users ret;
+    while(q.next_solution()) {
+        ret.push_back((long)gf_termv[1][1]);
+    }
+    return ret;
+}
+
+SRS::users SRS::getUsers() {
+    PlTermv termv(1);
+    PlQuery q("get_users", termv);
+    users ret;
+    while(q.next_solution()) {
+        ret.push_back((long)termv[0][1]);
+    }
+    return ret;
 }
 
 void SRS::generatePlans() {
@@ -270,11 +280,11 @@ inline float SRS::_euclideanDistance(float x1, float y1, float x2, float y2)
 }
 
 
-SRS::users_rank SRS::_getUsersSortedByAffinity(long me) {
-    return _getUsersSortedByAffinity(me, _plans);
+SRS::users_rank SRS::getUsersSortedByAffinity(long me) {
+    return getUsersSortedByAffinity(me, _plans);
 }
 
-SRS::users_rank SRS::_getUsersSortedByAffinity(long me, plans& p) {
+SRS::users_rank SRS::getUsersSortedByAffinity(long me, plans& p) {
     users_rank ret;
     users_rank nearest_users;
 
@@ -374,13 +384,25 @@ SRS::users_rank SRS::_getUsersSortedByAffinity(long me, plans& p) {
 }
 
 SRS::users_rank SRS::getRecommendation(long me) {
-    // TODO: filter friends or just followed
-    return _getUsersSortedByAffinity(me);
+    return getRecommendation(me, _plans);
 }
 
 SRS::users_rank SRS::getRecommendation(long me, plans& p) {
-    // TODO: filter friends or just followed
-    return _getUsersSortedByAffinity(me, p);
+    SRS::users_rank ur = getUsersSortedByAffinity(me, p);
+    SRS::users following = getFollowing(me);
+
+    for(auto const user : following) {
+
+        auto it = find_if(ur.begin(), ur.end(), [=](const pair<long, float> us_ra) -> bool {
+                return us_ra.first == user;
+                });
+
+        if(it != ur.end()) {
+            ur.erase(it);
+        }
+    }
+
+    return ur;
 }
 
 // Return plans containing the user

@@ -28,9 +28,12 @@ namespace srs {
             const plans& getPlans() const { return _plans; }
             plans getPlans(long, plans&);
             plans getPlans(long);
+            users_rank getUsersSortedByAffinity(long);
+            users_rank getUsersSortedByAffinity(long, plans&);
             users_rank getRecommendation(long);
             users_rank getRecommendation(long, plans&);
             users getFollowing(long);
+            users getUsers();
             ~SRS();
 
         private:
@@ -48,8 +51,6 @@ namespace srs {
             plans _plans;
             std::wstring _term(PlTerm);
             float _euclideanDistance(float, float, float, float);
-            users_rank _getUsersSortedByAffinity(long);
-            users_rank _getUsersSortedByAffinity(long, plans&);
     };
 }
 

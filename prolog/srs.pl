@@ -5,7 +5,7 @@
 % SRS works on its DB, created by the engine.
 
 :- module(srs, [
-    get_frequencies/8, populate/0, get_follow/3
+    get_frequencies/8, populate/0, get_follow/3, get_users/1
 ]).
 
 :- use_module(engine).
@@ -20,4 +20,5 @@ get_frequencies(user(A), tag(T), frequency(Tagged), frequency(RatedPositive), fr
         row(A,T,Tagged,RatedPositive,RatedNegative,Commented,Searched,Timestamp)).
 
 get_follow(user(A), user(B), Timestamp) :- follow(user(A), user(B), Timestamp).
+get_users(user(A)) :- users(user(A)).
 populate :- populate_db.
