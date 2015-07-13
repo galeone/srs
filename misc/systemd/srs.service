@@ -1,0 +1,15 @@
+[Unit]
+Description=SRS - Social Recommender System
+Documentation=TODO
+After=postgresql.service
+ 
+[Service]
+Type=simple
+ExecStart=/opt/srs
+ExecStop=ps aux |grep srs |awk '{ print $2 }' |head -n 1 | xargs kill
+# Errors occurs when postgresql is shutted down
+Restart=on-failure
+RestartSec=120
+ 
+[Install]
+WantedBy=multi-user.target

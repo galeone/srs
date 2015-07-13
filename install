@@ -61,4 +61,7 @@ cd cpp
 mkdir -p ../bin
 swipl-ld -o ../bin/srs *.cpp ../include/*.cpp ../../prolog/srs.pl -O -g -Wall -c++ clang++ -cc-options,-std=c++14 -ld-options=-lpthread
 
+cp ../bin/srs /opt
+cp ../../misc/systemd/srs.service /etc/systemd/system/
+
 echo "[+] Setup completed"; echo
