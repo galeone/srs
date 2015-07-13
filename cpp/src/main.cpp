@@ -66,16 +66,16 @@ int main(int argc, char **argv) {
 inline void printStat(int actual_user, int true_positive, int true_negative, int false_positive, int false_negative) {
     cout << "[+] \tTesting for user " << actual_user << "\n";
     cout << "[+] Building confusion matrix...\n";
-    cout << "Actual class: Followed\tNot followed\n";
+    cout << "\tActual class:\tFollowed\tNot followed\n";
     cout << "Predicted class\tFollowed\t" << true_positive << "\t" << false_positive << "\n\t\tNot followed\t" << false_negative << "\t" << true_negative <<"\n";
 
     if(true_positive + false_negative > 0) {
         cout << "Sensivity: " << (float)true_positive/(true_positive + false_negative) << "\n";
-        cout << "False negative rate: " << false_negative/(false_negative + true_positive) << "\n";
+        cout << "False negative rate: " << (float)false_negative/(false_negative + true_positive) << "\n";
     }
     if(false_positive + true_negative > 0) {
         float spc = (float)true_negative/(false_positive + true_negative);
-        cout << "Specificiy: " << spc << "\n";
+        cout << "Specificity: " << spc << "\n";
         cout << "Fall out: " << (1 - spc) << "\n";
     }
     if(true_positive + false_positive > 0) {
@@ -134,40 +134,43 @@ void handleRequest(TCPSocket *sock) {
             cout << "[+] Generating plans...\n";
             getSRS().generatePlans();
             SRS::users all_users = getSRS().getUsers();
-            auto au_s = all_users.size();
+            SRS::users test_users = {1898, 581, 574, 376, 817,740, 244, 1814,448,403, 352, 1788};
+            auto au_s = test_users.size();
             vector<int> true_positive(au_s,0); // followed and recommended to follow
             vector<int> false_positive(au_s, 0); // not followed but recommendted to follow
             vector<int> false_negative(au_s, 0); // followed but not recommended to follow
             vector<int> true_negative(au_s, 0);// not followed and not recommended to be followed
 
             for(int i=0; i<au_s;++i) {
-                auto actual_user = all_users[i];
+                auto actual_user = test_users[i];
 
-                SRS::users following = getSRS().getFollowing(actual_user); // ordered by follow time
+                SRS::users following = getSRS().getFollowing(actual_user);
                 SRS::users_rank affinity = getSRS().getUsersSortedByAffinity(actual_user);
 
-                auto it = find_if(affinity.begin(), affinity.end(), [&](pair<long, float> p) {
-                        return p.first == actual_user;
-                        });
-                bool recommended_to_follow = it != affinity.end();
+                for(auto const& other_user : all_users) {
+                    auto it = find_if(affinity.begin(), affinity.end(), [&](pair<long, float> p) {
+                            return p.first == other_user;
+                            });
+                    bool recommended_to_follow = it != affinity.end();
 
-                if(find(following.begin(), following.end(), actual_user) != following.end()) {
-                    // followed
-                    if(!recommended_to_follow) {
-                        // and not recommended
-                        ++false_negative[i];
+                    if(find(following.begin(), following.end(), other_user) != following.end()) {
+                        // followed
+                        if(!recommended_to_follow) {
+                            // and not recommended
+                            ++false_negative[i];
+                        } else {
+                            // and recommended
+                            ++true_positive[i];
+                        }
                     } else {
-                        // and recommended
-                        ++true_positive[i];
-                    }
-                } else {
-                    // not followed
-                    if(!recommended_to_follow) {
-                        // and not recommented
-                        ++true_negative[i];
-                    } else {
-                        // and recommented
-                        ++false_positive[i];
+                        // not followed
+                        if(!recommended_to_follow) {
+                            // and not recommented
+                            ++true_negative[i];
+                        } else {
+                            // and recommented
+                            ++false_positive[i];
+                        }
                     }
                 }
                 printStat(actual_user, true_positive[i], true_negative[i], false_positive[i], false_negative[i]);

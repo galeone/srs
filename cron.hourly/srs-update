@@ -1,3 +1,30 @@
-#!/usr/bin/env sh
-echo -ne "UPDATE
-BYE" | nc localhost 9876
+#!/usr/bin/env bash
+
+PORT=9876
+if [ $# -eq 1 ]; then
+    PORT=$1
+fi
+
+function trim() {
+    echo $(echo -e "$1" | tr -d '[[:space:]]')
+}
+
+exec 3<>/dev/tcp/localhost/$PORT
+
+echo -e "UPDATE\n" >&3
+read -u 3 RET
+RET=$(trim $RET)
+echo $RET
+
+if [ "$RET" == "WAIT" ]; then
+    read -u 3 RET
+    RET=$(trim $RET)
+    echo $RET
+    if [ "$RET" == "OK" ]; then
+        echo -e "BYE\n" >&3
+    fi;
+else
+    echo $RET
+    exit $?
+fi
+exit 0
