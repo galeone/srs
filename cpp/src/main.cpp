@@ -3,6 +3,7 @@
 #include <algorithm> // std::find_if_not
 #include <sstream>
 #include <cstdio>
+#include <pthread.h>
 
 using namespace std;
 using namespace srs;
@@ -11,14 +12,13 @@ using namespace srs;
 #define BASE_MAX 10000.0
 
 const int RCVBUFSIZE = 32;
-void handleRequest(TCPSocket *sock);     // TCP client handling function
+void *handleRequest(void *sock);     // TCP client handling function
 
 // RecSys in a singleton
 static SRS& getSRS() {
     static SRS recSys(ALPHA, BASE_MAX);
     return recSys;
 }
-
 
 // No comment for the lack of string::trim
 // Thanks to: https://stackoverflow.com/questions/216823/whats-the-best-way-to-trim-stdstring/17976541#17976541
@@ -46,7 +46,12 @@ int main(int argc, char **argv) {
         setlocale(LC_ALL, "en_US.utf8"); // Set locale (for wcstring)
         PlEngine engine(argc, argv); // Init Prolog engine
         for (;;) {
-            handleRequest(servSock.accept());
+            pthread_t tid;
+            TCPSocket *clntSock = servSock.accept();
+            if(pthread_create(&tid, NULL, handleRequest, (void *)clntSock) != 0) {
+                cerr << "Unable to create thread " << endl;
+                return EXIT_FAILURE;
+            }
         }
     } catch(PlError &e) {
         cerr << e.message;
@@ -93,9 +98,15 @@ inline void printStat(int actual_user, int true_positive, int true_negative, int
 }
 
 // TCP client handling function
-void handleRequest(TCPSocket *sock) {
+void * handleRequest(void *params) {
+    TCPSocket *sock = (TCPSocket *)params;
     char buffer[RCVBUFSIZE];
     memset(buffer, '\0', RCVBUFSIZE);
+    //http://www.swi-prolog.org/pldoc/man?section=foreignthread
+    if(PL_thread_attach_engine(NULL) < 0) {
+        cerr << "PL_thread_attach_engine error" << endl;
+        return NULL;
+    }
 
     while(sock->recv(buffer, RCVBUFSIZE) > 0) {
         cout << "[!] Received command: " << buffer << "\n";
@@ -239,4 +250,6 @@ void handleRequest(TCPSocket *sock) {
         memset(buffer, '\0', RCVBUFSIZE);
     }
     delete sock;
+    PL_thread_destroy_engine();
+    return NULL;
 }
