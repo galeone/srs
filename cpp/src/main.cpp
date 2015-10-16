@@ -12,7 +12,12 @@ using namespace srs;
 #define BASE_MAX 10000.0
 
 const int RCVBUFSIZE = 32;
-void *handleRequest(void *sock);     // TCP client handling function
+void *handleRequest(void *attrs);     // TCP client handling function
+
+typedef struct {
+    pthread_mutex_t *mux;
+    TCPSocket *sock;
+} thread_params;
 
 // RecSys in a singleton
 static SRS& getSRS() {
@@ -30,6 +35,7 @@ inline std::string trim(const std::string &s)
 
 int main(int argc, char **argv) {
     unsigned short port = 0;
+
     if (argc != 2) {
         cout << "[+] Using default port: 9876" << endl;
         port = 9876;
@@ -42,13 +48,23 @@ int main(int argc, char **argv) {
     }
     TCPServerSocket servSock(port);  // Socket descriptor for server
 
+    pthread_mutex_t mux;
+    if(pthread_mutex_init(&mux, NULL)) {
+        cerr << "Unable to inizialize mutex" << endl;
+        return EXIT_FAILURE;
+    }
+
     try {
         setlocale(LC_ALL, "en_US.utf8"); // Set locale (for wcstring)
         PlEngine engine(argc, argv); // Init Prolog engine
         for (;;) {
             pthread_t tid;
             TCPSocket *clntSock = servSock.accept();
-            if(pthread_create(&tid, NULL, handleRequest, (void *)clntSock) != 0) {
+            thread_params params;
+            params.mux = &mux;
+            params.sock = clntSock;
+
+            if(pthread_create(&tid, NULL, handleRequest, (void *)&params) != 0) {
                 cerr << "Unable to create thread " << endl;
                 return EXIT_FAILURE;
             }
@@ -98,8 +114,11 @@ inline void printStat(int actual_user, int true_positive, int true_negative, int
 }
 
 // TCP client handling function
-void * handleRequest(void *params) {
-    TCPSocket *sock = (TCPSocket *)params;
+void * handleRequest(void *p) {
+    thread_params *params = (thread_params *)p;
+    TCPSocket *sock = params->sock;
+    pthread_mutex_t *mux = params->mux;
+
     char buffer[RCVBUFSIZE];
     memset(buffer, '\0', RCVBUFSIZE);
     //http://www.swi-prolog.org/pldoc/man?section=foreignthread
@@ -113,11 +132,14 @@ void * handleRequest(void *params) {
         string command(buffer);
         command = trim(command);
         if(command == "UPDATE") {
+            // requires lock
             WAIT();
+            pthread_mutex_lock(mux);
             getSRS().updateDB();
             cout << "[+] Database updated..\n";
             getSRS().generatePlans();
             cout << "[+] Generated plans..\n";
+            pthread_mutex_unlock(mux);
             OK();
         } else if(command == "STORE PLANS") {
             // can't use wofstream because fstream is crap
@@ -140,12 +162,8 @@ void * handleRequest(void *params) {
             OK();  
         } else if(command == "RUN TESTS") {
             WAIT();
-            cout << "[+] Updating db...\n";
-            getSRS().updateDB();
-            cout << "[+] Generating plans...\n";
-            getSRS().generatePlans();
-            SRS::users all_users = getSRS().getUsers();
-            SRS::users test_users = {1898, 581, 574, 376, 817,740, 244, 1814,448,403, 352, 1788};
+            SRS::users all_users  = getSRS().getUsers();
+            SRS::users test_users = {1, 581, 574, 376, 817,740, 244, 1814,448,403, 352, 1788};
             auto au_s = test_users.size();
             vector<int> true_positive(au_s,0); // followed and recommended to follow
             vector<int> false_positive(au_s, 0); // not followed but recommendted to follow
