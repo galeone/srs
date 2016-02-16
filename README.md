@@ -38,7 +38,7 @@ Into the `misc/systemd` folder, you can find a systemd service file that you can
 To have up-to-date recommendations, you should put `cron.hourly/srs-update` into your local
 `/etc/cron.hourly/` folder or whatever have the same effect with your cron daemon.
 
-[Cronie](https://fedorahosted.org/cronie/) uses the `cron.<when>` folder. I recommend you (eheh) to don't make mess with the cronfile and use these folder instead.
+[Cronie](https://fedorahosted.org/cronie/) uses the `cron.<when>` folder. I recommend you (eheh) not to make mess with the cronfile and use these folders instead.
 
 ## Microsoft Windows
 
